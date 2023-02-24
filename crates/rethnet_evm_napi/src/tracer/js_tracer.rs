@@ -180,20 +180,31 @@ impl JsTracer {
                 ctx.value
                     .message
                     .to
-                    .as_ref()
                     .map_or_else(
                         || ctx.env.get_undefined().map(JsUndefined::into_unknown),
                         |to| {
                             ctx.env
-                                .create_buffer_copy(to)
+                                .create_buffer_with_data(to.0.into())
                                 .map(JsBufferValue::into_unknown)
                         },
                     )
                     .and_then(|to| tracing_message.set_named_property("to", to))?;
 
-                ctx.env
-                    .create_buffer_copy(&ctx.value.message.data)
-                    .and_then(|data| tracing_message.set_named_property("data", data.into_raw()))?;
+                if ctx.value.message.data.is_empty() {
+                    ctx.env.create_buffer(0)
+                } else {
+                    unsafe {
+                        ctx.env.create_buffer_with_borrowed_data(
+                            ctx.value.message.data.as_ptr(),
+                            ctx.value.message.data.len(),
+                            ctx.value.message.data,
+                            |data: Bytes, _env: Env| {
+                                std::mem::drop(data);
+                            },
+                        )
+                    }
+                }
+                .and_then(|data| tracing_message.set_named_property("data", data.into_raw()))?;
 
                 ctx.env
                     .create_bigint_from_words(false, ctx.value.message.value.as_limbs().to_vec())
@@ -202,12 +213,11 @@ impl JsTracer {
                 ctx.value
                     .message
                     .code_address
-                    .as_ref()
                     .map_or_else(
                         || ctx.env.get_undefined().map(JsUndefined::into_unknown),
                         |address| {
                             ctx.env
-                                .create_buffer_copy(address)
+                                .create_buffer_with_data(address.0.into())
                                 .map(JsBufferValue::into_unknown)
                         },
                     )
@@ -218,18 +228,25 @@ impl JsTracer {
                 ctx.value
                     .message
                     .code
-                    .as_ref()
                     .map_or_else(
                         || ctx.env.get_undefined().map(JsUndefined::into_unknown),
                         |code| {
-                            ctx.env
-                                .create_buffer_copy(&code.bytes()[..code.len()])
-                                .map(JsBufferValue::into_unknown)
+                            let code = code.original_bytes();
+
+                            unsafe {
+                                ctx.env.create_buffer_with_borrowed_data(
+                                    code.as_ptr(),
+                                    code.len(),
+                                    code,
+                                    |code: Bytes, _env: Env| {
+                                        std::mem::drop(code);
+                                    },
+                                )
+                            }
+                            .map(JsBufferValue::into_unknown)
                         },
                     )
-                    .and_then(|code_address| {
-                        tracing_message.set_named_property("code", code_address)
-                    })?;
+                    .and_then(|code| tracing_message.set_named_property("code", code))?;
 
                 let next = ctx.env.create_object()?;
 
@@ -313,7 +330,7 @@ impl JsTracer {
                 contract.set_named_property("nonce", nonce)?;
 
                 ctx.env
-                    .create_buffer_copy(ctx.value.contract.code_hash)
+                    .create_buffer_with_data(ctx.value.contract.code_hash.0.into())
                     .and_then(|code_hash| {
                         contract.set_named_property("codeHash", code_hash.into_unknown())
                     })?;
@@ -321,22 +338,30 @@ impl JsTracer {
                 ctx.value
                     .contract
                     .code
-                    .as_ref()
                     .map_or_else(
                         || ctx.env.get_undefined().map(JsUndefined::into_unknown),
                         |code| {
-                            ctx.env
-                                .create_buffer_copy(&code.bytes()[..code.len()])
-                                .map(|code| code.into_unknown())
+                            let code = code.original_bytes();
+
+                            unsafe {
+                                ctx.env.create_buffer_with_borrowed_data(
+                                    code.as_ptr(),
+                                    code.len(),
+                                    code,
+                                    |code: Bytes, _env: Env| {
+                                        std::mem::drop(code);
+                                    },
+                                )
+                            }
+                            .map(|code| code.into_unknown())
                         },
                     )
                     .and_then(|code| contract.set_named_property("code", code))?;
 
                 tracing_step.set_named_property("contract", contract)?;
 
-                let contract_address = &ctx.value.contract_address;
                 ctx.env
-                    .create_buffer_copy(contract_address)
+                    .create_buffer_with_data(ctx.value.contract_address.0.into())
                     .and_then(|contract_address| {
                         tracing_step
                             .set_named_property("contractAddress", contract_address.into_unknown())
@@ -387,12 +412,12 @@ impl JsTracer {
                                 for log in logs {
                                     let mut log_object = ctx.env.create_object()?;
 
-                                    ctx.env.create_buffer_copy(log.address).and_then(
-                                        |address| {
+                                    ctx.env
+                                        .create_buffer_with_data(log.address.0.into())
+                                        .and_then(|address| {
                                             log_object
                                                 .set_named_property("address", address.into_raw())
-                                        },
-                                    )?;
+                                        })?;
 
                                     u32::try_from(log.topics.len())
                                         .map_err(|e| {
@@ -401,9 +426,11 @@ impl JsTracer {
                                         .and_then(|num_topics| ctx.env.create_array(num_topics))
                                         .and_then(|mut topics| {
                                             for topic in log.topics {
-                                                ctx.env.create_buffer_copy(topic).and_then(
-                                                    |topic| topics.insert(topic.into_raw()),
-                                                )?
+                                                ctx.env
+                                                    .create_buffer_with_data(topic.0.into())
+                                                    .and_then(|topic| {
+                                                        topics.insert(topic.into_raw())
+                                                    })?
                                             }
 
                                             topics.coerce_to_object()
@@ -412,7 +439,21 @@ impl JsTracer {
                                             log_object.set_named_property("topics", topics)
                                         })?;
 
-                                    ctx.env.create_buffer_copy(&log.data).and_then(|data| {
+                                    if log.data.is_empty() {
+                                        ctx.env.create_buffer(0)
+                                    } else {
+                                        unsafe {
+                                            ctx.env.create_buffer_with_borrowed_data(
+                                                log.data.as_ptr(),
+                                                log.data.len(),
+                                                log.data,
+                                                |data: Bytes, _env: Env| {
+                                                    std::mem::drop(data);
+                                                },
+                                            )
+                                        }
+                                    }
+                                    .and_then(|data| {
                                         log_object.set_named_property("data", data.into_raw())
                                     })?;
 
@@ -430,19 +471,31 @@ impl JsTracer {
 
                         let mut transaction_output = ctx.env.create_object()?;
 
-                        ctx.env
-                            .create_buffer_copy(output)
-                            .map(JsBufferValue::into_unknown)
-                            .and_then(|output| {
-                                transaction_output.set_named_property("returnValue", output)
-                            })?;
+                        if output.is_empty() {
+                            ctx.env.create_buffer(0)
+                        } else {
+                            unsafe {
+                                ctx.env.create_buffer_with_borrowed_data(
+                                    output.as_ptr(),
+                                    output.len(),
+                                    output,
+                                    |data: Bytes, _env: Env| {
+                                        std::mem::drop(data);
+                                    },
+                                )
+                            }
+                        }
+                        .map(JsBufferValue::into_unknown)
+                        .and_then(|output| {
+                            transaction_output.set_named_property("returnValue", output)
+                        })?;
 
                         address
                             .map_or_else(
                                 || ctx.env.get_undefined().map(JsUndefined::into_unknown),
                                 |address| {
                                     ctx.env
-                                        .create_buffer_copy(address)
+                                        .create_buffer_with_data(address.0.into())
                                         .map(JsBufferValue::into_unknown)
                                 },
                             )
@@ -455,10 +508,22 @@ impl JsTracer {
                         gas_used
                     }
                     rethnet_evm::ExecutionResult::Revert { gas_used, output } => {
-                        ctx.env
-                            .create_buffer_copy(output)
-                            .map(JsBufferValue::into_unknown)
-                            .and_then(|output| result.set_named_property("output", output))?;
+                        if output.is_empty() {
+                            ctx.env.create_buffer(0)
+                        } else {
+                            unsafe {
+                                ctx.env.create_buffer_with_borrowed_data(
+                                    output.as_ptr(),
+                                    output.len(),
+                                    output,
+                                    |data: Bytes, _env: Env| {
+                                        std::mem::drop(data);
+                                    },
+                                )
+                            }
+                        }
+                        .map(JsBufferValue::into_unknown)
+                        .and_then(|output| result.set_named_property("output", output))?;
 
                         gas_used
                     }
@@ -511,7 +576,7 @@ impl JsTracer {
                 BeforeMessageHandlerCall { message, sender },
                 ThreadsafeFunctionCallMode::Blocking,
             );
-            assert_eq!(status, Status::Ok);
+            debug_assert_eq!(status, Status::Ok);
 
             receiver
                 .recv()
@@ -618,7 +683,7 @@ where
             AfterMessageHandlerCall { result, sender },
             ThreadsafeFunctionCallMode::Blocking,
         );
-        assert_eq!(status, Status::Ok);
+        debug_assert_eq!(status, Status::Ok);
 
         receiver
             .recv()
@@ -696,7 +761,7 @@ where
             AfterMessageHandlerCall { result, sender },
             ThreadsafeFunctionCallMode::Blocking,
         );
-        assert_eq!(status, Status::Ok);
+        debug_assert_eq!(status, Status::Ok);
 
         receiver
             .recv()
@@ -750,7 +815,7 @@ where
                 },
                 ThreadsafeFunctionCallMode::Blocking,
             );
-            assert_eq!(status, Status::Ok);
+            debug_assert_eq!(status, Status::Ok);
 
             receiver
                 .recv()

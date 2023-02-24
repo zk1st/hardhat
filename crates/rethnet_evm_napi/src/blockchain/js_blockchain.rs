@@ -28,7 +28,7 @@ impl BlockHash for JsBlockchain {
             },
             ThreadsafeFunctionCallMode::Blocking,
         );
-        assert_eq!(status, Status::Ok);
+        debug_assert_eq!(status, Status::Ok);
 
         receiver.recv().unwrap()
     }

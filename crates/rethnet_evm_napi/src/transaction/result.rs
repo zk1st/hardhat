@@ -147,11 +147,11 @@ impl From<(rethnet_evm::ExecutionResult, rethnet_evm::trace::Trace)> for Executi
                     logs,
                     output: match output {
                         rethnet_evm::Output::Call(return_value) => Either::A(CallOutput {
-                            return_value: Buffer::from(return_value.as_ref()),
+                            return_value: Buffer::from(Vec::from(return_value)),
                         }),
                         rethnet_evm::Output::Create(return_value, address) => {
                             Either::B(CreateOutput {
-                                return_value: Buffer::from(return_value.as_ref()),
+                                return_value: Buffer::from(Vec::from(return_value)),
                                 address: address.map(|address| Buffer::from(address.as_bytes())),
                             })
                         }
@@ -160,7 +160,7 @@ impl From<(rethnet_evm::ExecutionResult, rethnet_evm::trace::Trace)> for Executi
             }
             rethnet_evm::ExecutionResult::Revert { gas_used, output } => Either3::B(RevertResult {
                 gas_used: BigInt::from(gas_used),
-                output: Buffer::from(output.as_ref()),
+                output: Buffer::from(Vec::from(output)),
             }),
             rethnet_evm::ExecutionResult::Halt { reason, gas_used } => Either3::C(HaltResult {
                 reason: reason.into(),

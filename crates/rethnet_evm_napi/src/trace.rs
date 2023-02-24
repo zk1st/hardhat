@@ -10,7 +10,7 @@ pub struct Trace {
 impl From<rethnet_evm::trace::Trace> for Trace {
     fn from(value: rethnet_evm::trace::Trace) -> Self {
         let steps = value.steps.into_iter().map(From::from).collect();
-        let return_value = Buffer::from(value.return_value.as_ref());
+        let return_value = Buffer::from(Vec::from(value.return_value));
 
         Self {
             steps,

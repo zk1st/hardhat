@@ -20,7 +20,7 @@ impl From<rethnet_evm::Log> for Log {
         Self {
             address: Buffer::from(log.address.as_bytes()),
             topics,
-            data: Buffer::from(log.data.as_ref()),
+            data: Buffer::from(Vec::from(log.data)),
         }
     }
 }

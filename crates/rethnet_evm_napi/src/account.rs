@@ -44,7 +44,7 @@ impl From<rethnet_evm::Bytecode> for Bytecode {
     fn from(bytecode: rethnet_evm::Bytecode) -> Self {
         Self {
             hash: Buffer::from(bytecode.hash().as_bytes()),
-            code: Buffer::from(&bytecode.bytes()[..bytecode.len()]),
+            code: Buffer::from(bytecode.original_bytes().as_ref()),
         }
     }
 }

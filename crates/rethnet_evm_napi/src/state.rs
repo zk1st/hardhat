@@ -241,11 +241,11 @@ impl StateManager {
                     let mut bytecode = ctx.env.create_object()?;
 
                     ctx.env
-                        .create_buffer_copy(code.hash())
+                        .create_buffer_with_data(code.hash().to_vec())
                         .and_then(|hash| bytecode.set_named_property("hash", hash.into_raw()))?;
 
                     ctx.env
-                        .create_buffer_copy(&code.bytes()[..code.len()])
+                        .create_buffer_with_data(code.original_bytes().into())
                         .and_then(|code| bytecode.set_named_property("code", code.into_raw()))?;
 
                     bytecode.into_unknown()
@@ -277,11 +277,11 @@ impl StateManager {
                                     sender,
                                     balance: *balance,
                                     nonce: *nonce,
-                                    code: code.clone(),
+                                    code: code.take(),
                                 },
                                 ThreadsafeFunctionCallMode::Blocking,
                             );
-                            assert_eq!(status, Status::Ok);
+                            debug_assert_eq!(status, Status::Ok);
 
                             let new_account = receiver.recv().unwrap().expect("Failed to commit");
 
