@@ -13,13 +13,13 @@ export interface Bytecode {
   /** Byte code */
   readonly code: Buffer
 }
-export interface Account {
+export interface AccountData {
   /** Account balance */
-  readonly balance: bigint
+  readonly balance?: bigint
   /** Account nonce */
-  readonly nonce: bigint
+  readonly nonce?: bigint
   /** Optionally, byte code. Otherwise, hash is equal to `KECCAK_EMPTY` */
-  readonly code?: Bytecode
+  readonly code?: Bytecode | undefined | null
 }
 export interface BlockConfig {
   number?: bigint
@@ -122,16 +122,6 @@ export interface GenesisAccount {
   /** Account balance */
   balance: bigint
 }
-export interface Trace {
-  steps: Array<Step>
-  returnValue: Buffer
-}
-export interface Step {
-  opcode: number
-  gasCost: bigint
-  gasRefunded: number
-  exitCode: number
-}
 export interface TracingMessage {
   /** Recipient address. None if it is a Create message. */
   readonly to?: Buffer
@@ -166,19 +156,12 @@ export interface TracingStep {
   readonly stack: Array<bigint>
   /** The memory */
   readonly memory: Buffer
-  /** The contract being executed */
-  readonly contract: Account
   /** The address of the contract */
   readonly contractAddress: Buffer
 }
 export interface TracingMessageResult {
   /** Execution result */
   readonly executionResult: ExecutionResult
-}
-export interface TracingCallbacks {
-  beforeMessage: (message: TracingMessage, next: any) => Promise<void>
-  step: (step: TracingStep, next: any) => Promise<void>
-  afterMessage: (result: TracingMessageResult, next: any) => Promise<void>
 }
 /** The possible reasons for successful termination of the EVM. */
 export const enum SuccessReason {
@@ -250,14 +233,7 @@ export interface HaltResult {
 }
 /** The result of executing a transaction. */
 export interface ExecutionResult {
-  /** The transaction result */
   result: SuccessResult | RevertResult | HaltResult
-  /** The transaction trace */
-  trace: Array<TracingMessage | TracingStep | TracingMessageResult>
-}
-export interface TransactionResult {
-  execResult: ExecutionResult
-  state: any
 }
 export interface Transaction {
   /**
@@ -296,9 +272,15 @@ export interface Transaction {
 export interface TransactionConfig {
   disableBalanceCheck?: boolean
 }
+export class Account {
+  get balance(): bigint
+  get nonce(): bigint
+  get codeHash(): Buffer
+  get code(): Buffer | null
+}
 export class BlockBuilder {
   static new(blockchain: Blockchain, stateManager: StateManager, config: Config, parent: BlockHeader, block: BlockConfig): BlockBuilder
-  addTransaction(transaction: Transaction): Promise<ExecutionResult>
+  addTransaction(transaction: Transaction): Promise<TransactionResult>
   /**
    * This call consumes the [`BlockBuilder`] object in Rust. Afterwards, you can no longer call
    * methods on the JS object.
@@ -324,7 +306,7 @@ export class Rethnet {
   /** Executes the provided transaction without changing state, ignoring validation checks in the process. */
   guaranteedDryRun(transaction: Transaction, block: BlockConfig): Promise<TransactionResult>
   /** Executes the provided transaction, changing state in the process. */
-  run(transaction: Transaction, block: BlockConfig): Promise<ExecutionResult>
+  run(transaction: Transaction, block: BlockConfig): Promise<TransactionResult>
 }
 /** The Rethnet state */
 export class StateManager {
@@ -353,7 +335,7 @@ export class StateManager {
    * The modifier function receives the current values as individual parameters and will update the account's values
    * to the returned `Account` values.
    */
-  modifyAccount(address: Buffer, modifyAccountFn: (balance: bigint, nonce: bigint, code: Bytecode | undefined) => Promise<Account>): Promise<void>
+  modifyAccount(address: Buffer, modifyAccountFn: (balance: bigint, nonce: bigint, code: Bytecode | undefined) => Promise<AccountData>): Promise<void>
   /** Removes and returns the account at the specified address, if it exists. */
   removeAccount(address: Buffer): Promise<Account | null>
   /** Removes the snapshot corresponding to the specified state root, if it exists. Returns whether a snapshot was removed. */
@@ -363,6 +345,8 @@ export class StateManager {
   /** Reverts the state to match the specified state root. */
   setStateRoot(stateRoot: Buffer): Promise<void>
 }
-export class Tracer {
-  constructor(callbacks: TracingCallbacks)
+export class TransactionResult {
+  get result(): ExecutionResult
+  get state(): any | null
+  get trace(): Array<TracingMessage | TracingStep | TracingMessageResult> | null
 }

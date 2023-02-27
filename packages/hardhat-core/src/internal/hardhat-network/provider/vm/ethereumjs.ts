@@ -521,14 +521,14 @@ export class EthereumJSAdapter implements VMAdapter {
         gasLeft: step.gasLeft,
         stack: step.stack,
         memory: step.memory,
-        contract: {
-          balance: step.account.balance,
-          nonce: step.account.nonce,
-          code: {
-            hash: step.account.codeHash,
-            code: Buffer.from([]),
-          },
-        },
+        // contract: {
+        //   balance: step.account.balance,
+        //   nonce: step.account.nonce,
+        //   code: {
+        //     hash: step.account.codeHash,
+        //     code: Buffer.from([]),
+        //   },
+        // },
         contractAddress: step.address.buf,
       });
 
@@ -595,7 +595,6 @@ export class EthereumJSAdapter implements VMAdapter {
       await this._vmTracer.addAfterMessage({
         executionResult: {
           result: executionResult,
-          trace: [],
         },
       });
 

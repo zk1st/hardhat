@@ -3,7 +3,7 @@ import {
   bufferToBigInt,
   toBuffer,
 } from "@nomicfoundation/ethereumjs-util";
-import { StateManager, Account, Bytecode } from "rethnet-evm";
+import { StateManager, Account, Bytecode, AccountData } from "rethnet-evm";
 import { GenesisAccount } from "./node-types";
 
 /* eslint-disable @nomiclabs/hardhat-internal-rules/only-hardhat-error */
@@ -68,7 +68,7 @@ export class RethnetStateManager {
       balance: bigint,
       nonce: bigint,
       code: Bytecode | undefined
-    ) => Promise<Account>
+    ) => Promise<AccountData>
   ): Promise<void> {
     await this._state.modifyAccount(address.buf, modifyAccountFn);
   }
@@ -79,8 +79,9 @@ export class RethnetStateManager {
       return Buffer.allocUnsafe(0);
     }
 
-    if (account.code !== undefined) {
-      return account.code.code;
+    const code = account.code;
+    if (code !== null) {
+      return code;
     }
 
     return Buffer.from([]);

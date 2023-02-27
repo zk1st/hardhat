@@ -1,9 +1,11 @@
-use std::fmt::Debug;
+use std::mem;
 
-use napi::bindgen_prelude::{BigInt, Buffer};
+use napi::{
+    bindgen_prelude::{BigInt, Buffer},
+    Env, JsBuffer, JsBufferValue,
+};
 use napi_derive::napi;
-use rethnet_eth::Bytes;
-use rethnet_evm::{AccountInfo, KECCAK_EMPTY};
+use rethnet_eth::{Bytes, U256};
 
 use crate::cast::TryCast;
 
@@ -11,87 +13,176 @@ use crate::cast::TryCast;
 pub struct Bytecode {
     /// 256-bit code hash
     #[napi(readonly)]
-    pub hash: Buffer,
+    pub hash: JsBuffer,
     /// Byte code
     #[napi(readonly)]
-    pub code: Buffer,
+    pub code: JsBuffer,
 }
 
 #[napi(object)]
-#[derive(Debug)]
-pub struct Account {
+pub struct AccountData {
     /// Account balance
     #[napi(readonly)]
-    pub balance: BigInt,
+    pub balance: Option<BigInt>,
     /// Account nonce
     #[napi(readonly)]
-    pub nonce: BigInt,
+    pub nonce: Option<BigInt>,
     /// Optionally, byte code. Otherwise, hash is equal to `KECCAK_EMPTY`
     #[napi(readonly)]
-    pub code: Option<Bytecode>,
+    pub code: Option<Option<Bytecode>>,
 }
 
-impl Debug for Bytecode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Bytecode")
-            .field("code_hash", &self.hash.as_ref())
-            .field("code", &self.code.as_ref())
-            .finish()
-    }
+// #[napi(object)]
+// pub struct Account {
+//     /// Account balance
+//     #[napi(readonly)]
+//     pub balance: BigInt,
+//     /// Account nonce
+//     #[napi(readonly)]
+//     pub nonce: BigInt,
+//     /// Optionally, byte code. Otherwise, hash is equal to `KECCAK_EMPTY`
+//     #[napi(readonly)]
+//     pub code: Option<Bytecode>,
+// }
+
+#[napi]
+pub struct Account {
+    inner: rethnet_evm::AccountInfo,
 }
 
-impl From<rethnet_evm::Bytecode> for Bytecode {
-    fn from(bytecode: rethnet_evm::Bytecode) -> Self {
-        Self {
-            hash: Buffer::from(bytecode.hash().as_bytes()),
-            code: Buffer::from(&bytecode.bytes()[..bytecode.len()]),
+#[napi]
+impl Account {
+    #[napi(getter)]
+    pub fn balance(&self) -> BigInt {
+        BigInt {
+            sign_bit: false,
+            words: self.inner.balance.as_limbs().to_vec(),
         }
     }
-}
 
-impl From<AccountInfo> for Account {
-    fn from(account_info: AccountInfo) -> Self {
-        let code = if account_info.code_hash == KECCAK_EMPTY {
-            None
-        } else {
-            // We expect the code to always be provided
-            // TODO: Make this explicit in the type?
-            let code = account_info.code.unwrap();
-            Some(code.into())
-        };
+    #[napi(getter)]
+    pub fn nonce(&self) -> u64 {
+        self.inner.nonce
+    }
 
-        Self {
-            balance: BigInt {
-                sign_bit: false,
-                words: account_info.balance.as_limbs().to_vec(),
-            },
-            nonce: BigInt::from(account_info.nonce),
-            code,
-        }
+    #[napi(getter)]
+    pub fn code_hash(&self) -> Buffer {
+        Buffer::from(self.inner.code_hash.to_vec())
+    }
+
+    #[napi(getter)]
+    pub fn code(&self, env: Env) -> napi::Result<Option<JsBuffer>> {
+        self.inner.code.as_ref().map_or(Ok(None), |code| {
+            let code = code.bytecode.clone();
+
+            unsafe {
+                env.create_buffer_with_borrowed_data(
+                    code.as_ptr(),
+                    code.len(),
+                    code,
+                    |code: Bytes, _env| {
+                        mem::drop(code);
+                    },
+                )
+            }
+            .map(JsBufferValue::into_raw)
+            .map(Some)
+        })
+    }
+
+    pub(crate) fn as_inner(&self) -> &rethnet_evm::AccountInfo {
+        &self.inner
     }
 }
 
-impl TryCast<AccountInfo> for Account {
+impl TryCast<rethnet_evm::AccountInfo> for Account {
     type Error = napi::Error;
 
-    fn try_cast(self) -> std::result::Result<AccountInfo, Self::Error> {
-        let code = self.code.map_or(rethnet_evm::Bytecode::default(), |code| {
-            let code_hash = rethnet_eth::B256::from_slice(&code.hash);
-            let code = Bytes::copy_from_slice(&code.code);
+    fn try_cast(self) -> Result<rethnet_evm::AccountInfo, Self::Error> {
+        Ok(self.inner)
+    }
+}
 
-            debug_assert_eq!(
-                code_hash,
-                rethnet_evm::Bytecode::new_raw(code.clone()).hash()
-            );
+// impl Bytecode {
+//     pub fn new(env: &Env, bytecode: rethnet_evm::Bytecode) -> napi::Result<Self> {
+//         let code = bytecode.original_bytes();
 
-            unsafe { rethnet_evm::Bytecode::new_raw_with_hash(code, code_hash) }
-        });
+//         let hash = env
+//             .create_buffer_with_data(bytecode.hash().to_vec())
+//             .map(JsBufferValue::into_raw)?;
 
-        Ok(AccountInfo {
-            balance: self.balance.try_cast()?,
-            nonce: self.nonce.get_u64().1,
-            code_hash: code.hash(),
-            code: Some(code),
-        })
+//         let code = unsafe {
+//             env.create_buffer_with_borrowed_data(
+//                 code.as_ptr(),
+//                 code.len(),
+//                 code,
+//                 |code: Bytes, _env| {
+//                     mem::drop(code);
+//                 },
+//             )
+//         }
+//         .map(JsBufferValue::into_raw)?;
+
+//         Ok(Self { hash, code })
+//     }
+// }
+
+impl From<rethnet_evm::AccountInfo> for Account {
+    fn from(account_info: rethnet_evm::AccountInfo) -> Self {
+        Self {
+            inner: account_info,
+        }
+    }
+}
+
+impl
+    TryCast<(
+        Option<U256>,
+        Option<u64>,
+        Option<Option<rethnet_evm::Bytecode>>,
+    )> for AccountData
+{
+    type Error = napi::Error;
+
+    fn try_cast(
+        self,
+    ) -> Result<
+        (
+            Option<U256>,
+            Option<u64>,
+            Option<Option<rethnet_evm::Bytecode>>,
+        ),
+        Self::Error,
+    > {
+        let balance = self
+            .balance
+            .map_or(Ok(None), |balance| BigInt::try_cast(balance).map(Some))?;
+
+        let nonce = self.nonce.map(|nonce| nonce.get_u64().1);
+
+        let code = self.code.map_or(Ok(None), |code| {
+            code.map_or(Ok(Some(None)), |code| {
+                code.hash
+                    .into_value()
+                    .map(|hash| rethnet_eth::B256::from_slice(&hash))
+                    .and_then(|code_hash| {
+                        code.code
+                            .into_value()
+                            .map(|code| (code_hash, Bytes::copy_from_slice(code.as_ref())))
+                    })
+                    .map(|(code_hash, code)| {
+                        debug_assert_eq!(
+                            code_hash,
+                            rethnet_evm::Bytecode::new_raw(code.clone()).hash()
+                        );
+
+                        Some(Some(unsafe {
+                            rethnet_evm::Bytecode::new_raw_with_hash(code, code_hash)
+                        }))
+                    })
+            })
+        })?;
+
+        Ok((balance, nonce, code))
     }
 }

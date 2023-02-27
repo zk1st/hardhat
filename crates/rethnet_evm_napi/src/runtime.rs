@@ -10,11 +10,8 @@ use crate::{
     blockchain::Blockchain,
     config::Config,
     state::StateManager,
-    tracer::Tracer,
-    transaction::{
-        result::{ExecutionResult, TransactionResult},
-        Transaction,
-    },
+    // tracer::Tracer,
+    transaction::{result::TransactionResult, Transaction},
 };
 
 struct Logger;
@@ -60,19 +57,20 @@ impl Rethnet {
         &self,
         transaction: Transaction,
         block: BlockConfig,
-        tracer: Option<&Tracer>,
+        // tracer: Option<&Tracer>,
     ) -> napi::Result<TransactionResult> {
         let transaction = TxEnv::try_from(transaction)?;
         let block = BlockEnv::try_from(block)?;
 
-        let inspector = tracer.map(|tracer| tracer.as_dyn_inspector());
+        // let inspector = tracer.map(|tracer| tracer.as_dyn_inspector());
 
-        TransactionResult::try_from(
-            self.runtime
-                .dry_run(transaction, block, inspector)
-                .await
-                .map_err(|e| napi::Error::new(Status::GenericFailure, e.to_string()))?,
-        )
+        let (result, state, trace) = self
+            .runtime
+            .dry_run(transaction, block, None)
+            .await
+            .map_err(|e| napi::Error::new(Status::GenericFailure, e.to_string()))?;
+
+        Ok(TransactionResult::new(result, Some(state), Some(trace)))
     }
 
     /// Executes the provided transaction without changing state, ignoring validation checks in the process.
@@ -81,19 +79,20 @@ impl Rethnet {
         &self,
         transaction: Transaction,
         block: BlockConfig,
-        tracer: Option<&Tracer>,
+        // tracer: Option<&Tracer>,
     ) -> napi::Result<TransactionResult> {
         let transaction = TxEnv::try_from(transaction)?;
         let block = BlockEnv::try_from(block)?;
 
-        let inspector = tracer.map(|tracer| tracer.as_dyn_inspector());
+        // let inspector = tracer.map(|tracer| tracer.as_dyn_inspector());
 
-        TransactionResult::try_from(
-            self.runtime
-                .guaranteed_dry_run(transaction, block, inspector)
-                .await
-                .map_err(|e| napi::Error::new(Status::GenericFailure, e.to_string()))?,
-        )
+        let (result, state, trace) = self
+            .runtime
+            .guaranteed_dry_run(transaction, block, None)
+            .await
+            .map_err(|e| napi::Error::new(Status::GenericFailure, e.to_string()))?;
+
+        Ok(TransactionResult::new(result, Some(state), Some(trace)))
     }
 
     /// Executes the provided transaction, changing state in the process.
@@ -102,16 +101,16 @@ impl Rethnet {
         &self,
         transaction: Transaction,
         block: BlockConfig,
-        tracer: Option<&Tracer>,
-    ) -> napi::Result<ExecutionResult> {
+        // tracer: Option<&Tracer>,
+    ) -> napi::Result<TransactionResult> {
         let transaction = TxEnv::try_from(transaction)?;
         let block = BlockEnv::try_from(block)?;
 
-        let inspector = tracer.map(|tracer| tracer.as_dyn_inspector());
+        // let inspector = tracer.map(|tracer| tracer.as_dyn_inspector());
 
-        Ok(ExecutionResult::from(self
+        let (result, trace) = self
             .runtime
-            .run(transaction, block, inspector)
+            .run(transaction, block, None)
             .await
             .map_err(|e| {
                 napi::Error::new(
@@ -123,6 +122,8 @@ impl Rethnet {
                         e => e.to_string(),
                     },
                 )
-            })?))
+            })?;
+
+        Ok(TransactionResult::new(result, None, Some(trace)))
     }
 }

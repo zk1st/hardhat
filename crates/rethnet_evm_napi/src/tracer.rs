@@ -1,10 +1,9 @@
 mod js_tracer;
 
-use napi::Env;
 use napi_derive::napi;
 use rethnet_evm::{state::StateError, AsyncDatabase, Inspector};
 
-use self::js_tracer::{JsTracer, TracingCallbacks};
+pub use self::js_tracer::{TracingMessage, TracingMessageResult, TracingStep};
 
 #[napi]
 pub struct Tracer {
@@ -22,9 +21,9 @@ impl Tracer {
 #[napi]
 impl Tracer {
     #[napi(constructor)]
-    pub fn new(env: Env, callbacks: TracingCallbacks) -> napi::Result<Self> {
-        JsTracer::new(&env, callbacks).map(|inner| Self {
-            inner: Box::new(inner),
-        })
+    pub fn new() -> Self {
+        Self {
+            inner: Box::new(JsTracer::default()),
+        }
     }
 }

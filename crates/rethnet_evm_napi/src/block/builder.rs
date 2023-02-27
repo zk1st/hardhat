@@ -14,8 +14,7 @@ use crate::{
     cast::TryCast,
     config::Config,
     state::StateManager,
-    tracer::Tracer,
-    transaction::{result::ExecutionResult, Transaction},
+    transaction::{result::TransactionResult, Transaction},
 };
 
 use super::{BlockConfig, BlockHeader};
@@ -56,20 +55,20 @@ impl BlockBuilder {
     pub async fn add_transaction(
         &self,
         transaction: Transaction,
-        tracer: Option<&Tracer>,
-    ) -> napi::Result<ExecutionResult> {
+        // tracer: Option<&Tracer>,
+    ) -> napi::Result<TransactionResult> {
         let mut builder = self.builder.lock().await;
         if let Some(builder) = builder.as_mut() {
             let transaction = TxEnv::try_from(transaction)?;
 
-            let inspector = tracer.map(|tracer| tracer.as_dyn_inspector());
+            // let inspector = tracer.map(|tracer| tracer.as_dyn_inspector());
 
-            let result = builder
-                .add_transaction(transaction, inspector)
+            let (result, trace) = builder
+                .add_transaction(transaction, None)
                 .await
                 .map_err(|e| napi::Error::new(Status::GenericFailure, e.to_string()))?;
 
-            Ok(result.into())
+            Ok(TransactionResult::new(result, None, Some(trace)))
         } else {
             Err(napi::Error::new(
                 Status::InvalidArg,

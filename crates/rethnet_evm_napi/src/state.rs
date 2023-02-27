@@ -1,6 +1,9 @@
-use std::sync::{
-    mpsc::{channel, Sender},
-    Arc,
+use std::{
+    mem,
+    sync::{
+        mpsc::{channel, Sender},
+        Arc,
+    },
 };
 
 use napi::{bindgen_prelude::*, JsFunction, JsObject, NapiRaw, Status};
@@ -13,7 +16,7 @@ use rethnet_evm::{
 use secp256k1::Secp256k1;
 
 use crate::{
-    account::Account,
+    account::{Account, AccountData},
     cast::TryCast,
     sync::{await_promise, handle_error},
     threadsafe_function::{ThreadSafeCallContext, ThreadsafeFunction, ThreadsafeFunctionCallMode},
@@ -23,7 +26,13 @@ struct ModifyAccountCall {
     pub balance: U256,
     pub nonce: u64,
     pub code: Option<Bytecode>,
-    pub sender: Sender<napi::Result<AccountInfo>>,
+    pub sender: Sender<
+        napi::Result<(
+            Option<U256>,
+            Option<u64>,
+            Option<Option<rethnet_evm::Bytecode>>,
+        )>,
+    >,
 }
 
 /// An account that needs to be created during the genesis block.
@@ -189,9 +198,9 @@ impl StateManager {
 
     /// Inserts the provided account at the specified address.
     #[napi]
-    pub async fn insert_account(&self, address: Buffer, account: Account) -> napi::Result<()> {
+    pub async fn insert_account(&self, address: Buffer, account: &Account) -> napi::Result<()> {
         let address = Address::from_slice(&address);
-        let account: AccountInfo = account.try_cast()?;
+        let account = account.as_inner().clone();
 
         self.state
             .insert_account(address, account)
@@ -214,7 +223,7 @@ impl StateManager {
         env: Env,
         address: Buffer,
         #[napi(
-            ts_arg_type = "(balance: bigint, nonce: bigint, code: Bytecode | undefined) => Promise<Account>"
+            ts_arg_type = "(balance: bigint, nonce: bigint, code: Bytecode | undefined) => Promise<AccountData>"
         )]
         modify_account_fn: JsFunction,
     ) -> napi::Result<JsObject> {
@@ -244,9 +253,19 @@ impl StateManager {
                         .create_buffer_copy(code.hash())
                         .and_then(|hash| bytecode.set_named_property("hash", hash.into_raw()))?;
 
-                    ctx.env
-                        .create_buffer_copy(&code.bytes()[..code.len()])
-                        .and_then(|code| bytecode.set_named_property("code", code.into_raw()))?;
+                    let code = code.original_bytes();
+
+                    unsafe {
+                        ctx.env.create_buffer_with_borrowed_data(
+                            code.as_ptr(),
+                            code.len(),
+                            code,
+                            |code: rethnet_eth::Bytes, _env| {
+                                mem::drop(code);
+                            },
+                        )
+                    }
+                    .and_then(|code| bytecode.set_named_property("code", code.into_raw()))?;
 
                     bytecode.into_unknown()
                 } else {
@@ -254,8 +273,14 @@ impl StateManager {
                 };
 
                 let promise = ctx.callback.call(None, &[balance, nonce, code])?;
-                let result =
-                    await_promise::<Account, AccountInfo>(ctx.env, promise, ctx.value.sender);
+                let result = await_promise::<
+                    AccountData,
+                    (
+                        Option<U256>,
+                        Option<u64>,
+                        Option<Option<rethnet_evm::Bytecode>>,
+                    ),
+                >(ctx.env, promise, ctx.value.sender);
 
                 handle_error(sender, result)
             },
@@ -283,11 +308,15 @@ impl StateManager {
                             );
                             assert_eq!(status, Status::Ok);
 
-                            let new_account = receiver.recv().unwrap().expect("Failed to commit");
+                            let (new_balance, new_nonce, new_code) =
+                                receiver.recv().unwrap().expect("Failed to commit");
 
-                            *balance = new_account.balance;
-                            *nonce = new_account.nonce;
-                            *code = new_account.code;
+                            *balance = new_balance.unwrap_or(*balance);
+                            *nonce = new_nonce.unwrap_or(*nonce);
+
+                            if let Some(new_code) = new_code {
+                                *code = new_code;
+                            }
                         },
                     ),
                 )

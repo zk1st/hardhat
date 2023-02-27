@@ -462,19 +462,19 @@ export class DualModeAdapter implements VMAdapter {
         throw new Error("Different step memory");
       }
 
-      if (ethereumJSStep.contract.balance !== rethnetStep.contract.balance) {
-        console.trace(
-          `Different steps[${stepIdx}] contract balance: ${ethereumJSStep.contract.balance} !== ${rethnetStep.contract.balance}`
-        );
-        throw new Error("Different step contract balance");
-      }
+      // if (ethereumJSStep.contract.balance !== rethnetStep.contract.balance) {
+      //   console.trace(
+      //     `Different steps[${stepIdx}] contract balance: ${ethereumJSStep.contract.balance} !== ${rethnetStep.contract.balance}`
+      //   );
+      //   throw new Error("Different step contract balance");
+      // }
 
-      if (ethereumJSStep.contract.nonce !== rethnetStep.contract.nonce) {
-        console.trace(
-          `Different steps[${stepIdx}] contract nonce: ${ethereumJSStep.contract.nonce} !== ${rethnetStep.contract.nonce}`
-        );
-        throw new Error("Different step contract nonce");
-      }
+      // if (ethereumJSStep.contract.nonce !== rethnetStep.contract.nonce) {
+      //   console.trace(
+      //     `Different steps[${stepIdx}] contract nonce: ${ethereumJSStep.contract.nonce} !== ${rethnetStep.contract.nonce}`
+      //   );
+      //   throw new Error("Different step contract nonce");
+      // }
 
       // Code can be stored separately from the account in Rethnet
       // const ethereumJSCode = ethereumJSStep.contract.code;

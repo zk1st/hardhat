@@ -7,11 +7,11 @@ import {
 } from "@nomicfoundation/ethereumjs-util";
 import { TypedTransaction } from "@nomicfoundation/ethereumjs-tx";
 import {
-  Account as RethnetAccount,
   BlockBuilder,
   Blockchain,
   Bytecode,
   Rethnet,
+  AccountData,
 } from "rethnet-evm";
 
 import { isForkedNodeConfig, NodeConfig } from "../node-types";
@@ -114,7 +114,7 @@ export class RethnetAdapter implements VMAdapter {
       prevrandao: prevRandao,
     });
 
-    for (const traceItem of rethnetResult.execResult.trace) {
+    for (const traceItem of rethnetResult.trace!) {
       if ("pc" in traceItem) {
         // step
         await this._vmTracer.addStep(traceItem);
@@ -129,13 +129,13 @@ export class RethnetAdapter implements VMAdapter {
 
     try {
       const result = rethnetResultToRunTxResult(
-        rethnetResult.execResult,
+        rethnetResult.result,
         blockContext.header.gasUsed
       );
-      return [result, rethnetResult.execResult.trace];
+      return [result, rethnetResult.trace];
     } catch (e) {
       // console.log("Rethnet trace");
-      // console.log(rethnetResult.execResult.trace);
+      // console.log(rethnetResult.trace);
       throw e;
     }
   }
@@ -150,7 +150,7 @@ export class RethnetAdapter implements VMAdapter {
       account?.nonce,
       account?.balance,
       storageRoot ?? undefined,
-      account?.code?.hash
+      account?.codeHash
     );
   }
 
@@ -183,10 +183,10 @@ export class RethnetAdapter implements VMAdapter {
     return this._state.modifyAccount(
       address,
       async function (
-        balance: bigint,
-        nonce: bigint,
+        _balance: bigint,
+        _nonce: bigint,
         code: Bytecode | undefined
-      ): Promise<RethnetAccount> {
+      ): Promise<AccountData> {
         const newCode: Bytecode | undefined =
           account.codeHash === KECCAK256_NULL
             ? undefined
@@ -217,7 +217,7 @@ export class RethnetAdapter implements VMAdapter {
         balance: bigint,
         nonce: bigint,
         code: Bytecode | undefined
-      ): Promise<RethnetAccount> {
+      ): Promise<AccountData> {
         const newCode: Bytecode | undefined =
           codeHash === KECCAK256_NULL
             ? undefined
@@ -305,7 +305,7 @@ export class RethnetAdapter implements VMAdapter {
       ethereumjsHeaderDataToRethnet(block.header, difficulty, prevRandao)
     );
 
-    for (const traceItem of rethnetResult.trace) {
+    for (const traceItem of rethnetResult.trace!) {
       if ("pc" in traceItem) {
         // step
         await this._vmTracer.addStep(traceItem);
@@ -320,7 +320,7 @@ export class RethnetAdapter implements VMAdapter {
 
     try {
       const result = rethnetResultToRunTxResult(
-        rethnetResult,
+        rethnetResult.result,
         block.header.gasUsed
       );
       return [result, rethnetResult.trace];
