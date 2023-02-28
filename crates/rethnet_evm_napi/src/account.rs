@@ -73,7 +73,7 @@ impl Account {
     #[napi(getter)]
     pub fn code(&self, env: Env) -> napi::Result<Option<JsBuffer>> {
         self.inner.code.as_ref().map_or(Ok(None), |code| {
-            let code = code.bytecode.clone();
+            let code = code.original_bytes();
 
             unsafe {
                 env.create_buffer_with_borrowed_data(
