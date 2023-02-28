@@ -2,9 +2,12 @@ mod debug;
 mod layered_state;
 mod remote;
 mod request;
+mod storage;
 mod sync;
 
 use rethnet_eth::B256;
+
+use self::storage::RethnetStorage;
 
 pub use self::{
     debug::{AccountModifierFn, StateDebug},
