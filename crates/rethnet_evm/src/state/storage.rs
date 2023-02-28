@@ -20,6 +20,11 @@ impl RethnetStorage {
         }
     }
 
+    pub fn extend<I: IntoIterator<Item = (U256, U256)>>(&mut self, iter: I) {
+        self.slots.extend(iter);
+        self.slots.retain(|_index, value| *value != U256::ZERO)
+    }
+
     pub fn get(&self, index: &U256) -> Option<&U256> {
         self.slots.get(index)
     }
