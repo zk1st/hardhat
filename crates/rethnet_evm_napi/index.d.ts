@@ -150,20 +150,6 @@ export interface TracingStep {
   readonly depth: number
   /** The program counter */
   readonly pc: bigint
-  /** The executed op code */
-  readonly opcode: string
-  /** The amount of gas that was used by the step */
-  readonly gasCost: bigint
-  /** The amount of gas that was refunded by the step */
-  readonly gasRefunded: bigint
-  /** The amount of gas left */
-  readonly gasLeft: bigint
-  /** The stack */
-  readonly stack: Array<bigint>
-  /** The memory */
-  readonly memory: Buffer
-  /** The address of the contract */
-  readonly contractAddress: Buffer
 }
 export interface TracingMessageResult {
   /** Execution result */

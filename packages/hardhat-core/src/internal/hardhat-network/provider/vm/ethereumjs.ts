@@ -520,13 +520,13 @@ export class EthereumJSAdapter implements VMAdapter {
       await this._vmTracer.addStep({
         depth: step.depth,
         pc: BigInt(step.pc),
-        opcode: step.opcode.name,
+        // opcode: step.opcode.name,
         // returnValue: 0, // Do we have error values in ethereumjs?
-        gasCost: BigInt(step.opcode.fee) + (step.opcode.dynamicFee ?? 0n),
-        gasRefunded: step.gasRefund,
-        gasLeft: step.gasLeft,
-        stack: step.stack,
-        memory: step.memory,
+        // gasCost: BigInt(step.opcode.fee) + (step.opcode.dynamicFee ?? 0n),
+        // gasRefunded: step.gasRefund,
+        // gasLeft: step.gasLeft,
+        // stack: step.stack,
+        // memory: step.memory,
         // contract: {
         //   balance: step.account.balance,
         //   nonce: step.account.nonce,
@@ -535,7 +535,7 @@ export class EthereumJSAdapter implements VMAdapter {
         //     code: Buffer.from([]),
         //   },
         // },
-        contractAddress: step.address.buf,
+        // contractAddress: step.address.buf,
       });
 
       return next();

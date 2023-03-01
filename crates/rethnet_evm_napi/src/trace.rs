@@ -5,10 +5,7 @@ use napi::{
     Env, JsBuffer, JsBufferValue,
 };
 use napi_derive::napi;
-use rethnet_evm::{
-    trace::{BeforeMessage, Step},
-    OPCODE_JUMPMAP,
-};
+use rethnet_evm::trace::{BeforeMessage, Step};
 
 use crate::transaction::result::ExecutionResult;
 
@@ -159,33 +156,33 @@ pub struct TracingStep {
     /// The program counter
     #[napi(readonly)]
     pub pc: BigInt,
-    /// The executed op code
-    #[napi(readonly)]
-    pub opcode: String,
+    // /// The executed op code
+    // #[napi(readonly)]
+    // pub opcode: String,
     // /// The return value of the step
     // #[napi(readonly)]
     // pub return_value: u8,
-    /// The amount of gas that was used by the step
-    #[napi(readonly)]
-    pub gas_cost: BigInt,
-    /// The amount of gas that was refunded by the step
-    #[napi(readonly)]
-    pub gas_refunded: BigInt,
-    /// The amount of gas left
-    #[napi(readonly)]
-    pub gas_left: BigInt,
-    /// The stack
-    #[napi(readonly)]
-    pub stack: Vec<BigInt>,
-    /// The memory
-    #[napi(readonly)]
-    pub memory: Buffer,
+    // /// The amount of gas that was used by the step
+    // #[napi(readonly)]
+    // pub gas_cost: BigInt,
+    // /// The amount of gas that was refunded by the step
+    // #[napi(readonly)]
+    // pub gas_refunded: BigInt,
+    // /// The amount of gas left
+    // #[napi(readonly)]
+    // pub gas_left: BigInt,
+    // /// The stack
+    // #[napi(readonly)]
+    // pub stack: Vec<BigInt>,
+    // /// The memory
+    // #[napi(readonly)]
+    // pub memory: Buffer,
     // /// The contract being executed
     // #[napi(readonly)]
     // pub contract: Account,
-    /// The address of the contract
-    #[napi(readonly)]
-    pub contract_address: Buffer,
+    // /// The address of the contract
+    // #[napi(readonly)]
+    // pub contract_address: Buffer,
     // /// The address of the code being executed
     // #[napi(readonly)]
     // pub code_address: Buffer,
@@ -196,16 +193,16 @@ impl TracingStep {
         Self {
             depth: step.depth as u8,
             pc: BigInt::from(step.pc),
-            opcode: OPCODE_JUMPMAP[usize::from(step.opcode)]
-                .unwrap_or("")
-                .to_string(),
-            gas_cost: BigInt::from(0u64),
-            gas_refunded: BigInt::from(0u64),
-            gas_left: BigInt::from(0u64),
-            stack: Vec::new(),
-            memory: Buffer::from(Vec::new()),
+            // opcode: OPCODE_JUMPMAP[usize::from(step.opcode)]
+            //     .unwrap_or("")
+            //     .to_string(),
+            // gas_cost: BigInt::from(0u64),
+            // gas_refunded: BigInt::from(0u64),
+            // gas_left: BigInt::from(0u64),
+            // stack: Vec::new(),
+            // memory: Buffer::from(Vec::new()),
             // contract: Account::from(step.contract),
-            contract_address: Buffer::from(step.contract_address.to_vec()),
+            // contract_address: Buffer::from(step.contract_address.to_vec()),
         }
     }
 }

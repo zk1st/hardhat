@@ -52,16 +52,16 @@ pub struct Step {
     pub pc: u64,
     /// The call depth
     pub depth: u64,
-    /// The executed op code
-    pub opcode: u8,
+    // /// The executed op code
+    // pub opcode: u8,
     // /// The amount of gas that was used by the step
     // pub gas_cost: u64,
     // /// The amount of gas that was refunded by the step
     // pub gas_refunded: i64,
-    /// The contract being executed
-    pub contract: AccountInfo,
-    /// The address of the contract
-    pub contract_address: Address,
+    // /// The contract being executed
+    // pub contract: AccountInfo,
+    // /// The address of the contract
+    // pub contract_address: Address,
 }
 
 impl Trace {
@@ -80,17 +80,17 @@ impl Trace {
         &mut self,
         depth: u64,
         pc: usize,
-        opcode: u8,
-        gas: &Gas,
-        contract: &AccountInfo,
-        contract_address: &Address,
+        _opcode: u8,
+        _gas: &Gas,
+        _contract: &AccountInfo,
+        _contract_address: &Address,
     ) {
         self.messages.push(TraceMessage::Step(Step {
             pc: pc as u64,
             depth,
-            opcode,
-            contract: contract.clone(),
-            contract_address: *contract_address,
+            // opcode,
+            // contract: contract.clone(),
+            // contract_address: *contract_address,
         }));
     }
 }
