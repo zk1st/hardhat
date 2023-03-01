@@ -13,6 +13,13 @@ pub struct RethnetStorage {
 }
 
 impl RethnetStorage {
+    pub fn new(slots: Storage) -> Self {
+        Self {
+            slots,
+            storage_root: None,
+        }
+    }
+
     pub fn extend<I: IntoIterator<Item = (U256, U256)>>(&mut self, iter: I) {
         self.mark_dirty();
         self.slots.extend(iter);

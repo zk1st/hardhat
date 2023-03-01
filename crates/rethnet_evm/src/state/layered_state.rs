@@ -1,14 +1,12 @@
 use hashbrown::HashMap;
-use rethnet_eth::{
-    account::BasicAccount, state::state_root, trie::KECCAK_NULL_RLP, Address, B256, U256,
-};
+use rethnet_eth::{account::BasicAccount, state::state_root, Address, B256, U256};
 use revm::{
     db::State,
     primitives::{Account, AccountInfo, Bytecode, KECCAK_EMPTY},
     DatabaseCommit,
 };
 
-use super::{storage::RethnetStorage, StateDebug, StateError};
+use super::{account::RethnetAccount, storage::RethnetStorage, StateDebug, StateError};
 
 /// A state consisting of layers.
 #[derive(Clone, Debug)]
@@ -79,10 +77,8 @@ impl<Layer: Clone + Default> Default for LayeredState<Layer> {
 /// A layer with information needed for [`Rethnet`].
 #[derive(Clone, Debug, Default)]
 pub struct RethnetLayer {
-    /// Address -> AccountInfo
-    account_infos: HashMap<Address, AccountInfo>,
-    /// Address -> Storage
-    storage: HashMap<Address, RethnetStorage>,
+    /// Address -> Account
+    accounts: HashMap<Address, RethnetAccount>,
     /// Code hash -> Address
     contracts: HashMap<B256, Bytecode>,
     /// Cached state root
@@ -94,11 +90,11 @@ impl RethnetLayer {
     pub fn with_genesis_accounts(genesis_accounts: HashMap<Address, AccountInfo>) -> Self {
         let genesis_accounts = genesis_accounts
             .into_iter()
-            .map(|(address, account_info)| (address, account_info))
+            .map(|(address, account_info)| (address, RethnetAccount::new(account_info)))
             .collect();
 
         Self {
-            account_infos: genesis_accounts,
+            accounts: genesis_accounts,
             ..Default::default()
         }
     }
@@ -112,26 +108,15 @@ impl RethnetLayer {
         if let Some(state_root) = self.state_root {
             state_root
         } else {
-            let storage_roots: HashMap<Address, B256> = self
-                .storage
-                .iter_mut()
-                .map(|(address, storage)| (*address, storage.storage_root()))
-                .collect();
-
             let state = self
-                .account_infos
-                .iter()
-                .map(|(address, account_info)| {
-                    let storage_root = storage_roots
-                        .get(address)
-                        .cloned()
-                        .unwrap_or(KECCAK_NULL_RLP);
-
+                .accounts
+                .iter_mut()
+                .map(|(address, account)| {
                     let account = BasicAccount {
-                        nonce: U256::from(account_info.nonce),
-                        balance: account_info.balance,
-                        storage_root,
-                        code_hash: account_info.code_hash,
+                        nonce: U256::from(account.info.nonce),
+                        balance: account.info.balance,
+                        storage_root: account.storage.storage_root(),
+                        code_hash: account.info.code_hash,
                     };
 
                     (*address, account)
@@ -150,47 +135,43 @@ impl RethnetLayer {
     }
 
     /// Insert the provided `AccountInfo` at the specified `address`.
-    pub fn insert_account(&mut self, address: Address, mut account_info: AccountInfo) {
-        if let Some(code) = account_info.code.take() {
+    pub fn insert_account(&mut self, address: Address, mut account: RethnetAccount) {
+        if let Some(code) = account.info.code.take() {
             if !code.is_empty() {
-                account_info.code_hash = code.hash();
+                account.info.code_hash = code.hash();
                 if self.contracts.insert(code.hash(), code).is_some() {
                     self.mark_dirty();
                 }
             }
         }
 
-        if account_info.code_hash.is_zero() {
-            account_info.code_hash = KECCAK_EMPTY;
+        if account.info.code_hash.is_zero() {
+            account.info.code_hash = KECCAK_EMPTY;
         }
 
-        let new_code_hash = account_info.code_hash;
+        let new_code_hash = account.info.code_hash;
 
-        if let Some(old_account) = self.account_infos.insert(address, account_info) {
+        if let Some(old_account) = self.accounts.insert(address, account) {
             self.mark_dirty();
 
-            if old_account.code_hash != new_code_hash {
-                self.contracts.remove(&old_account.code_hash);
+            if old_account.info.code_hash != new_code_hash {
+                self.contracts.remove(&old_account.info.code_hash);
             }
         }
     }
 
     /// Removes the [`AccountInfo`] corresponding to the specified address.
-    fn remove_account(&mut self, address: &Address) -> Option<AccountInfo> {
-        let account_info = self.account_infos.remove(address);
+    fn remove_account(&mut self, address: &Address) -> Option<RethnetAccount> {
+        let account = self.accounts.remove(address);
 
-        if let Some(account_info) = &account_info {
-            debug_assert!(account_info.code.is_none());
+        if let Some(account_info) = &account {
+            debug_assert!(account_info.info.code.is_none());
 
             self.mark_dirty();
-            self.contracts.remove(&account_info.code_hash);
+            self.contracts.remove(&account_info.info.code_hash);
         }
 
-        if self.storage.remove(address).is_some() {
-            self.mark_dirty();
-        }
-
-        account_info
+        account
     }
 }
 
@@ -198,7 +179,11 @@ impl State for LayeredState<RethnetLayer> {
     type Error = StateError;
 
     fn basic(&mut self, address: Address) -> Result<Option<AccountInfo>, Self::Error> {
-        let account = self.last_layer_mut().account_infos.get(&address).cloned();
+        let account = self
+            .last_layer_mut()
+            .accounts
+            .get(&address)
+            .map(|account| account.info.clone());
 
         // TODO: Move this out of LayeredState when forking
         Ok(account.or(Some(AccountInfo {
@@ -224,9 +209,9 @@ impl State for LayeredState<RethnetLayer> {
     fn storage(&mut self, address: Address, index: U256) -> Result<U256, Self::Error> {
         Ok(self
             .last_layer_mut()
-            .storage
+            .accounts
             .get(&address)
-            .and_then(|storage| storage.get(&index))
+            .and_then(|account| account.storage.get(&index))
             .cloned()
             .unwrap_or(U256::ZERO))
     }
@@ -234,25 +219,45 @@ impl State for LayeredState<RethnetLayer> {
 
 impl DatabaseCommit for LayeredState<RethnetLayer> {
     fn commit(&mut self, changes: HashMap<Address, Account>) {
+        if !changes.is_empty() {
+            self.last_layer_mut().mark_dirty();
+        }
+
         changes.into_iter().for_each(|(address, account)| {
             if account.is_empty() || account.is_destroyed {
                 self.last_layer_mut().remove_account(&address);
             } else {
-                self.last_layer_mut().mark_dirty();
-                self.last_layer_mut().insert_account(address, account.info);
+                let last_layer = self.last_layer_mut();
 
-                let storage = self.last_layer_mut().storage.entry(address).or_default();
+                if let Some(old_account) = last_layer.accounts.get_mut(&address) {
+                    old_account.info = account.info.clone();
 
-                if account.storage_cleared {
-                    *storage = RethnetStorage::default();
+                    if account.storage_cleared {
+                        old_account.storage = RethnetStorage::default();
+                    }
+
+                    old_account.storage.extend(
+                        account
+                            .storage
+                            .into_iter()
+                            .map(|(index, value)| (index, value.present_value())),
+                    );
+                } else {
+                    last_layer.insert_account(
+                        address,
+                        RethnetAccount {
+                            info: account.info,
+                            storage: RethnetStorage::new(
+                                account
+                                    .storage
+                                    .into_iter()
+                                    .filter(|(_index, value)| value.present_value() != U256::ZERO)
+                                    .map(|(index, value)| (index, value.present_value()))
+                                    .collect(),
+                            ),
+                        },
+                    )
                 }
-
-                storage.extend(
-                    account
-                        .storage
-                        .into_iter()
-                        .map(|(index, value)| (index, value.present_value())),
-                );
             }
         });
     }
@@ -264,9 +269,9 @@ impl StateDebug for LayeredState<RethnetLayer> {
     fn account_storage_root(&mut self, address: &Address) -> Result<Option<B256>, Self::Error> {
         Ok(self
             .last_layer_mut()
-            .storage
+            .accounts
             .get_mut(address)
-            .map(RethnetStorage::storage_root))
+            .map(|account| account.storage.storage_root()))
     }
 
     fn insert_account(
@@ -274,7 +279,8 @@ impl StateDebug for LayeredState<RethnetLayer> {
         address: Address,
         account_info: AccountInfo,
     ) -> Result<(), Self::Error> {
-        self.last_layer_mut().insert_account(address, account_info);
+        self.last_layer_mut()
+            .insert_account(address, RethnetAccount::new(account_info));
 
         Ok(())
     }
@@ -301,25 +307,21 @@ impl StateDebug for LayeredState<RethnetLayer> {
         address: Address,
         modifier: Box<dyn Fn(&mut U256, &mut u64, &mut Option<Bytecode>) + Send>,
     ) -> Result<(), Self::Error> {
-        let account_info = self
-            .last_layer_mut()
-            .account_infos
-            .entry(address)
-            .or_default();
+        let account = self.last_layer_mut().accounts.entry(address).or_default();
 
-        let old_code_hash = account_info.code_hash;
+        let old_code_hash = account.info.code_hash;
 
         modifier(
-            &mut account_info.balance,
-            &mut account_info.nonce,
-            &mut account_info.code,
+            &mut account.info.balance,
+            &mut account.info.nonce,
+            &mut account.info.code,
         );
 
-        if let Some(code) = account_info.code.take() {
+        if let Some(code) = account.info.code.take() {
             let new_code_hash = code.hash();
 
             if old_code_hash != new_code_hash {
-                account_info.code_hash = new_code_hash;
+                account.info.code_hash = new_code_hash;
 
                 let last_layer = self.last_layer_mut();
                 last_layer.contracts.remove(&old_code_hash);
@@ -333,7 +335,10 @@ impl StateDebug for LayeredState<RethnetLayer> {
     }
 
     fn remove_account(&mut self, address: Address) -> Result<Option<AccountInfo>, Self::Error> {
-        Ok(self.last_layer_mut().remove_account(&address))
+        Ok(self
+            .last_layer_mut()
+            .remove_account(&address)
+            .map(|account| account.info))
     }
 
     fn remove_snapshot(&mut self, state_root: &B256) -> bool {
@@ -350,9 +355,10 @@ impl StateDebug for LayeredState<RethnetLayer> {
 
         last_layer.mark_dirty();
         last_layer
-            .storage
+            .accounts
             .entry(address)
             .or_default()
+            .storage
             .insert(index, value);
 
         Ok(())
