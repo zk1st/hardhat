@@ -382,7 +382,6 @@ impl StateDebug for LayeredState<RethnetLayer> {
                 })
         {
             self.stack.truncate(layer_id + 1);
-            self.add_layer(self.stack.last().unwrap().clone());
 
             Ok(())
         } else {
