@@ -13,13 +13,6 @@ pub struct RethnetStorage {
 }
 
 impl RethnetStorage {
-    pub fn new(slots: Storage) -> Self {
-        Self {
-            slots,
-            storage_root: None,
-        }
-    }
-
     pub fn extend<I: IntoIterator<Item = (U256, U256)>>(&mut self, iter: I) {
         self.mark_dirty();
         self.slots.extend(iter);
@@ -33,11 +26,6 @@ impl RethnetStorage {
     pub fn insert(&mut self, index: U256, value: U256) {
         self.mark_dirty();
         self.slots.insert(index, value);
-    }
-
-    pub fn remove(&mut self, index: &U256) -> Option<U256> {
-        self.mark_dirty();
-        self.slots.remove(index)
     }
 
     pub fn storage_root(&mut self) -> B256 {
