@@ -368,10 +368,26 @@ impl StateDebug for LayeredState<RethnetLayer> {
         if let Some(snapshot) = self.snapshots.get(state_root) {
             self.stack = snapshot.clone();
 
-            return Ok(());
-        }
+            Ok(())
+        } else if let Some(layer_id) =
+            self.stack
+                .iter_mut()
+                .enumerate()
+                .find_map(|(layer_id, layer)| {
+                    if layer.state_root() == *state_root {
+                        Some(layer_id)
+                    } else {
+                        None
+                    }
+                })
+        {
+            self.stack.truncate(layer_id + 1);
+            self.add_layer(self.stack.last().unwrap().clone());
 
-        Err(StateError::InvalidStateRoot(*state_root))
+            Ok(())
+        } else {
+            Err(StateError::InvalidStateRoot(*state_root))
+        }
     }
 
     fn state_root(&mut self) -> Result<B256, Self::Error> {

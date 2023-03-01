@@ -2064,14 +2064,14 @@ Hardhat Network's forking functionality only works with blocks from at least spu
       );
     }
 
-    const [snapshot, existed] = await this._vm.makeSnapshot();
+    const [snapshot, snapshotExisted] = await this._vm.makeSnapshot();
     await this._setBlockContext(block);
     try {
       return await action();
     } finally {
       await this._vm.restoreContext(snapshot);
 
-      if (!existed) {
+      if (!snapshotExisted) {
         await this._vm.removeSnapshot(snapshot);
       }
     }
