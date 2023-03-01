@@ -68,24 +68,9 @@ impl TryFrom<BlockConfig> for rethnet_evm::HeaderData {
             number: value
                 .number
                 .map_or(Ok(None), |number| number.try_cast().map(Some))?,
-            coinbase: value
-                .coinbase
-                .map(|coinbase| Address::from_slice(&coinbase)),
-            timestamp: value
-                .timestamp
-                .map_or(Ok(None), |timestamp| timestamp.try_cast().map(Some))?,
-            difficulty: value
-                .difficulty
-                .map_or(Ok(None), |difficulty| difficulty.try_cast().map(Some))?,
-            basefee: value
-                .basefee
-                .map_or(Ok(None), |basefee| basefee.try_cast().map(Some))?,
             gas_limit: value
                 .gas_limit
                 .map_or(Ok(None), |gas_limit| gas_limit.try_cast().map(Some))?,
-            parent_hash: value
-                .parent_hash
-                .map_or(Ok(None), |parent_hash| parent_hash.try_cast().map(Some))?,
         })
     }
 }

@@ -292,11 +292,6 @@ export class BlockBuilder {
    * methods on the JS object.
    */
   finalize(rewards: Array<[Buffer, bigint]>): Promise<void>
-  /**
-   * This call consumes the [`BlockBuilder`] object in Rust. Afterwards, you can no longer call
-   * methods on the JS object.
-   */
-  abort(): Promise<void>
 }
 /** The Rethnet blockchain */
 export class Blockchain {

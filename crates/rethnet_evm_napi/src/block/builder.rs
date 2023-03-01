@@ -102,22 +102,4 @@ impl BlockBuilder {
             ))
         }
     }
-
-    /// This call consumes the [`BlockBuilder`] object in Rust. Afterwards, you can no longer call
-    /// methods on the JS object.
-    #[napi]
-    pub async fn abort(&self) -> napi::Result<()> {
-        let mut builder = self.builder.lock().await;
-        if let Some(builder) = builder.take() {
-            builder
-                .abort()
-                .await
-                .map_err(|e| napi::Error::new(Status::GenericFailure, e.to_string()))
-        } else {
-            Err(napi::Error::new(
-                Status::InvalidArg,
-                "The BlockBuilder object has been moved in Rust".to_owned(),
-            ))
-        }
-    }
 }
