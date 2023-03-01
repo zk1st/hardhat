@@ -252,7 +252,9 @@ export class RethnetAdapter implements VMAdapter {
    * Get the root of the current state trie.
    */
   public async getStateRoot(): Promise<Buffer> {
-    return this._state.getStateRoot();
+    // HACK: The EthereumJS adapter allows people to revert to any state for which `getStateRoot` has been called,
+    // so we need to mimick that behaviour
+    return (await this._state.makeSnapshot())[0];
   }
 
   /**
@@ -394,8 +396,12 @@ export class RethnetAdapter implements VMAdapter {
     throw new Error("traceTransaction not implemented for Rethnet");
   }
 
-  public async makeSnapshot(): Promise<Buffer> {
+  public async makeSnapshot(): Promise<[Buffer, boolean]> {
     return this._state.makeSnapshot();
+  }
+
+  public async removeSnapshot(stateRoot: Buffer): Promise<boolean> {
+    return this._state.removeSnapshot(stateRoot);
   }
 
   public getLastTrace(): {

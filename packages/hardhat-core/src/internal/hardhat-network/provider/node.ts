@@ -974,7 +974,7 @@ Hardhat Network's forking functionality only works with blocks from at least spu
       id,
       date: new Date(),
       latestBlock: await this.getLatestBlock(),
-      stateRoot: await this._vm.makeSnapshot(),
+      stateRoot: (await this._vm.makeSnapshot())[0],
       txPoolSnapshotId: this._txPool.snapshot(),
       blockTimeOffsetSeconds: this.getTimeIncrement(),
       nextBlockTimestamp: this.getNextBlockTimestamp(),
@@ -2064,12 +2064,16 @@ Hardhat Network's forking functionality only works with blocks from at least spu
       );
     }
 
-    const currentStateRoot = await this._vm.getStateRoot();
+    const [snapshot, existed] = await this._vm.makeSnapshot();
     await this._setBlockContext(block);
     try {
       return await action();
     } finally {
-      await this._vm.restoreContext(currentStateRoot);
+      await this._vm.restoreContext(snapshot);
+
+      if (!existed) {
+        await this._vm.removeSnapshot(snapshot);
+      }
     }
   }
 

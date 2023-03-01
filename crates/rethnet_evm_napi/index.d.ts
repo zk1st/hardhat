@@ -122,6 +122,12 @@ export interface GenesisAccount {
   /** Account balance */
   balance: bigint
 }
+export interface Snapshot {
+  /** Snapshot's state root */
+  stateRoot: Buffer
+  /** Whether the snapshot already existed. */
+  existed: boolean
+}
 export interface TracingMessage {
   /** Recipient address. None if it is a Create message. */
   readonly to?: Buffer
@@ -329,7 +335,7 @@ export class StateManager {
   /** Inserts the provided account at the specified address. */
   insertAccount(address: Buffer, account: Account): Promise<void>
   /** Makes a snapshot of the database that's retained until [`removeSnapshot`] is called. Returns the snapshot's identifier. */
-  makeSnapshot(): Promise<Buffer>
+  makeSnapshot(): Promise<Snapshot>
   /**
    * Modifies the account with the provided address using the specified modifier function.
    * The modifier function receives the current values as individual parameters and will update the account's values

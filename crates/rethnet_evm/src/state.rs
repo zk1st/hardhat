@@ -7,8 +7,6 @@ mod sync;
 
 use rethnet_eth::B256;
 
-use self::storage::RethnetStorage;
-
 pub use self::{
     debug::{AccountModifierFn, StateDebug},
     layered_state::{LayeredState, RethnetLayer},
