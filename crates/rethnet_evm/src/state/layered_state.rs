@@ -88,14 +88,23 @@ pub struct RethnetLayer {
 impl RethnetLayer {
     /// Creates a `RethnetLayer` with the provided genesis accounts.
     pub fn with_genesis_accounts(genesis_accounts: HashMap<Address, AccountInfo>) -> Self {
-        let genesis_accounts = genesis_accounts
+        let mut accounts: HashMap<Address, RethnetAccount> = genesis_accounts
             .into_iter()
             .map(|(address, account_info)| (address, RethnetAccount::new(account_info)))
             .collect();
 
+        let contracts = accounts
+            .iter_mut()
+            .filter_map(|(_address, account)| {
+                let code = account.split_code();
+                code.map(|code| (code.hash(), code))
+            })
+            .collect();
+
         Self {
-            accounts: genesis_accounts,
-            ..Default::default()
+            accounts,
+            contracts,
+            state_root: None,
         }
     }
 
@@ -136,13 +145,9 @@ impl RethnetLayer {
 
     /// Insert the provided `AccountInfo` at the specified `address`.
     pub fn insert_account(&mut self, address: Address, mut account: RethnetAccount) {
-        if let Some(code) = account.info.code.take() {
-            if !code.is_empty() {
-                account.info.code_hash = code.hash();
-                if self.contracts.insert(code.hash(), code).is_some() {
-                    self.mark_dirty();
-                }
-            }
+        if let Some(code) = account.split_code() {
+            self.contracts.insert(code.hash(), code);
+            self.mark_dirty();
         }
 
         if account.info.code_hash.is_zero() {
