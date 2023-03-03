@@ -441,13 +441,13 @@ impl StateDebug for LayeredState<RethnetLayer> {
             self.last_layer_mut().state_root.replace(state_root);
         }
 
-        if let Some(snapshot) = self.snapshots.get(state_root) {
+        if let Some(snapshot) = self.snapshots.remove(state_root) {
             // Retain all layers except the first
             self.reverted_layers = Some(RevertedLayers {
                 parent_state_root: self.stack.first().unwrap().state_root.unwrap(),
                 stack: self.stack.split_off(1),
             });
-            self.stack = snapshot.clone();
+            self.stack = snapshot;
 
             return Ok(());
         }
