@@ -41,7 +41,6 @@ export const UNRECOGNIZED_CONTRACT_NAME = "<UnrecognizedContract>";
 
 export interface SourceReference {
   sourceName: string;
-  sourceContent: string;
   contract?: string;
   function?: string;
   line: number;

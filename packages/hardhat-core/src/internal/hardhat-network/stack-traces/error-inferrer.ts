@@ -807,7 +807,6 @@ export class ErrorInferrer {
   ): SourceReference {
     return {
       sourceName: func.location.file.sourceName,
-      sourceContent: func.location.file.content,
       contract: trace.bytecode.contract.name,
       function: func.name,
       line: func.location.getStartingLineNumber(),
@@ -866,7 +865,6 @@ export class ErrorInferrer {
     const location = trace.bytecode.contract.location;
     return {
       sourceName: location.file.sourceName,
-      sourceContent: location.file.content,
       contract: trace.bytecode.contract.name,
       line: location.getStartingLineNumber(),
       range: [location.offset, location.offset + location.length],
@@ -912,7 +910,6 @@ export class ErrorInferrer {
 
     return {
       sourceName: func.location.file.sourceName,
-      sourceContent: func.location.file.content,
       contract: trace.bytecode.contract.name,
       function: FALLBACK_FUNCTION_NAME,
       line: func.location.getStartingLineNumber(),
@@ -962,7 +959,6 @@ export class ErrorInferrer {
 
     return {
       sourceName: contract.location.file.sourceName,
-      sourceContent: contract.location.file.content,
       contract: contract.name,
       function: CONSTRUCTOR_FUNCTION_NAME,
       line,
@@ -1250,7 +1246,6 @@ export class ErrorInferrer {
               contract: trace.bytecode.contract.name,
               function: FALLBACK_FUNCTION_NAME,
               sourceName: location.file.sourceName,
-              sourceContent: location.file.content,
               line: location.getStartingLineNumber(),
               range: [location.offset, location.offset + location.length],
             },
@@ -1267,7 +1262,6 @@ export class ErrorInferrer {
             contract: trace.bytecode.contract.name,
             function: RECEIVE_FUNCTION_NAME,
             sourceName: location.file.sourceName,
-            sourceContent: location.file.content,
             line: location.getStartingLineNumber(),
             range: [location.offset, location.offset + location.length],
           },
@@ -1387,7 +1381,6 @@ export class ErrorInferrer {
           function: CONSTRUCTOR_FUNCTION_NAME,
           contract: trace.bytecode.contract.name,
           sourceName: location.file.sourceName,
-          sourceContent: location.file.content,
           line: location.getStartingLineNumber(),
           range: [location.offset, location.offset + location.length],
         };
@@ -1434,26 +1427,28 @@ export class ErrorInferrer {
       return;
     }
 
-    const lines = revertFrame.sourceReference.sourceContent.split("\n");
-
-    const currentLine = lines[revertFrame.sourceReference.line - 1];
-
-    if (currentLine.includes("require") || currentLine.includes("revert")) {
-      return;
-    }
-
-    const nextLines = lines.slice(revertFrame.sourceReference.line);
-    const firstNonEmptyLine = nextLines.findIndex((l) => l.trim() !== "");
-
-    if (firstNonEmptyLine === -1) {
-      return;
-    }
-
-    const nextLine = nextLines[firstNonEmptyLine];
-
-    if (nextLine.includes("require") || nextLine.includes("revert")) {
-      revertFrame.sourceReference.line += 1 + firstNonEmptyLine;
-    }
+    // TODO: Figure out what to do with this heuristic
+    //
+    // const lines = revertFrame.sourceReference.sourceContent.split("\n");
+    //
+    // const currentLine = lines[revertFrame.sourceReference.line - 1];
+    //
+    // if (currentLine.includes("require") || currentLine.includes("revert")) {
+    //   return;
+    // }
+    //
+    // const nextLines = lines.slice(revertFrame.sourceReference.line);
+    // const firstNonEmptyLine = nextLines.findIndex((l) => l.trim() !== "");
+    //
+    // if (firstNonEmptyLine === -1) {
+    //   return;
+    // }
+    //
+    // const nextLine = nextLines[firstNonEmptyLine];
+    //
+    // if (nextLine.includes("require") || nextLine.includes("revert")) {
+    //   revertFrame.sourceReference.line += 1 + firstNonEmptyLine;
+    // }
   }
 
   private _getLastInstructionWithValidLocationStepIndex(
@@ -1749,7 +1744,6 @@ export function instructionToCallstackStackTraceEntry(
       pc: inst.pc,
       sourceReference: {
         sourceName: bytecode.contract.location.file.sourceName,
-        sourceContent: bytecode.contract.location.file.content,
         contract: bytecode.contract.name,
         function: undefined,
         line: bytecode.contract.location.getStartingLineNumber(),
@@ -1788,7 +1782,6 @@ export function instructionToCallstackStackTraceEntry(
       function: undefined,
       contract: bytecode.contract.name,
       sourceName: inst.location.file.sourceName,
-      sourceContent: inst.location.file.content,
       line: inst.location.getStartingLineNumber(),
       range: [
         inst.location.offset,
@@ -1830,7 +1823,6 @@ function sourceLocationToSourceReference(
         ? undefined
         : bytecode.contract.name,
     sourceName: func.location.file.sourceName,
-    sourceContent: func.location.file.content,
     line: location.getStartingLineNumber(),
     range: [location.offset, location.offset + location.length],
   };

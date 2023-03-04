@@ -39,10 +39,15 @@ export class SourceFile {
   public readonly contracts: Contract[] = [];
   public readonly functions: ContractFunction[] = [];
 
-  constructor(
-    public readonly sourceName: string,
-    public readonly content: string
-  ) {}
+  public readonly newLines: number[] = [];
+
+  constructor(public readonly sourceName: string, content: string) {
+    for (let i = 0; i < content.length; i++) {
+      if (content[i] === "\n") {
+        this.newLines.push(i);
+      }
+    }
+  }
 
   public addContract(contract: Contract) {
     if (contract.location.file !== this) {
@@ -88,10 +93,12 @@ export class SourceLocation {
     if (this._line === undefined) {
       this._line = 1;
 
-      for (const c of this.file.content.slice(0, this.offset)) {
-        if (c === "\n") {
-          this._line += 1;
+      for (const newLine of this.file.newLines) {
+        if (newLine > this.offset) {
+          break;
         }
+
+        this._line++;
       }
     }
 
