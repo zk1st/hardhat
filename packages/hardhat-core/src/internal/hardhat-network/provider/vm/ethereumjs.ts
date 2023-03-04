@@ -438,8 +438,8 @@ export class EthereumJSAdapter implements VMAdapter {
     this._blockStartStateRoot = undefined;
   }
 
-  public async makeSnapshot(): Promise<Buffer> {
-    return this.getStateRoot();
+  public async makeSnapshot(): Promise<[Buffer, boolean]> {
+    return [await this.getStateRoot(), false];
   }
 
   public async removeSnapshot(_stateRoot: Buffer): Promise<boolean> {

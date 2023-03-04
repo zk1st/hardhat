@@ -389,7 +389,7 @@ export class RethnetAdapter implements VMAdapter {
     throw new Error("traceTransaction not implemented for Rethnet");
   }
 
-  public async makeSnapshot(): Promise<Buffer> {
+  public async makeSnapshot(): Promise<[Buffer, boolean]> {
     return this._state.makeSnapshot();
   }
 
