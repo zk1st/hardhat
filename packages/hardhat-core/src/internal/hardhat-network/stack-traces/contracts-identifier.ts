@@ -1,5 +1,4 @@
-import { bufferToHex } from "@nomicfoundation/ethereumjs-util";
-
+import { createNonCryptographicHashBasedIdentifier } from "../../util/hash";
 import {
   normalizeLibraryRuntimeBytecodeIfNecessary,
   zeroOutAddresses,
@@ -8,95 +7,21 @@ import {
 import { EvmMessageTrace, isCreateTrace } from "./message-trace";
 import { Bytecode } from "./model";
 import { getOpcodeLength, Opcode } from "./opcodes";
-
-/**
- * This class represent a somewhat special Trie of bytecodes.
- *
- * What makes it special is that every node has a set of all of its descendants and its depth.
- */
-class BytecodeTrie {
-  public static isBytecodeTrie(o: any): o is BytecodeTrie {
-    if (o === undefined || o === null) {
-      return false;
-    }
-
-    return "childNodes" in o;
-  }
-
-  public readonly childNodes: Map<number, BytecodeTrie> = new Map();
-  public readonly descendants: Bytecode[] = [];
-  public match?: Bytecode;
-
-  constructor(public readonly depth: number) {}
-
-  public add(bytecode: Bytecode) {
-    // eslint-disable-next-line @typescript-eslint/no-this-alias
-    let trieNode: BytecodeTrie = this;
-    for (
-      let currentCodeByte = 0;
-      currentCodeByte <= bytecode.normalizedCode.length;
-      currentCodeByte += 1
-    ) {
-      if (currentCodeByte === bytecode.normalizedCode.length) {
-        // If multiple contracts with the exact same bytecode are added we keep the last of them.
-        // Note that this includes the metadata hash, so the chances of happening are pretty remote,
-        // except in super artificial cases that we have in our test suite.
-        trieNode.match = bytecode;
-        return;
-      }
-
-      const byte = bytecode.normalizedCode[currentCodeByte];
-      trieNode.descendants.push(bytecode);
-
-      let childNode = trieNode.childNodes.get(byte);
-      if (childNode === undefined) {
-        childNode = new BytecodeTrie(currentCodeByte);
-        trieNode.childNodes.set(byte, childNode);
-      }
-
-      trieNode = childNode;
-    }
-  }
-
-  /**
-   * Searches for a bytecode. If it's an exact match, it is returned. If there's no match, but a
-   * prefix of the code is found in the trie, the node of the longest prefix is returned. If the
-   * entire code is covered by the trie, and there's no match, we return undefined.
-   */
-  public search(
-    code: Buffer,
-    currentCodeByte: number = 0
-  ): Bytecode | BytecodeTrie | undefined {
-    if (currentCodeByte > code.length) {
-      return undefined;
-    }
-
-    // eslint-disable-next-line @typescript-eslint/no-this-alias
-    let trieNode: BytecodeTrie = this;
-    for (; currentCodeByte <= code.length; currentCodeByte += 1) {
-      if (currentCodeByte === code.length) {
-        return trieNode.match;
-      }
-
-      const childNode = trieNode.childNodes.get(code[currentCodeByte]);
-
-      if (childNode === undefined) {
-        return trieNode;
-      }
-
-      trieNode = childNode;
-    }
-  }
-}
+import { RadixNode, RadixTree } from "./radix-tree";
 
 export class ContractsIdentifier {
-  private _trie = new BytecodeTrie(-1);
   private _cache: Map<string, Bytecode> = new Map();
+
+  private _bytecodes: Map<string, Bytecode> = new Map();
+  private _radixTree = new RadixTree();
 
   constructor(private readonly _enableCache = true) {}
 
   public addBytecode(bytecode: Bytecode) {
-    this._trie.add(bytecode);
+    // this._trie.add(bytecode);
+    const word = this._getRadixTrieWord(bytecode.normalizedCode);
+    this._bytecodes.set(word, bytecode);
+    this._radixTree.add(word);
     this._cache.clear();
   }
 
@@ -107,42 +32,63 @@ export class ContractsIdentifier {
       trace.code
     );
 
-    let normalizedCodeHex: string | undefined;
+    let cacheKey: string | undefined;
     if (this._enableCache) {
-      normalizedCodeHex = bufferToHex(normalizedCode);
-      const cached = this._cache.get(normalizedCodeHex);
+      cacheKey = this._getCacheKey(normalizedCode);
+      const cached = this._cache.get(cacheKey);
 
       if (cached !== undefined) {
         return cached;
       }
     }
 
-    const result = this._searchBytecode(trace, normalizedCode);
+    // const result = this._searchBytecode(trace, normalizedCode);
+    const result = this._searchBytecodeOnRadixTree(trace, normalizedCode);
 
     if (this._enableCache) {
       if (result !== undefined) {
-        this._cache.set(normalizedCodeHex!, result);
+        const deploymentBytecodeWithArguments =
+          result.isDeployment &&
+          result.normalizedCode.length < normalizedCode.length;
+
+        if (!deploymentBytecodeWithArguments) {
+          this._cache.set(cacheKey!, result);
+        }
       }
     }
 
     return result;
   }
 
-  private _searchBytecode(
+  private _getCacheKey(normalizedCode: Buffer): string {
+    return createNonCryptographicHashBasedIdentifier(normalizedCode).toString(
+      "hex"
+    );
+  }
+
+  private _getRadixTrieWord(normalizedCode: Buffer): string {
+    return normalizedCode.toString("hex");
+  }
+
+  private _searchBytecodeOnRadixTree(
     trace: EvmMessageTrace,
     code: Buffer,
     normalizeLibraries = true,
-    trie = this._trie,
-    firstByteToSearch = 0
+    radixNode: RadixNode = this._radixTree.root
   ): Bytecode | undefined {
-    const searchResult = trie.search(code, firstByteToSearch);
+    const word = this._getRadixTrieWord(code);
+    const [found, matchedChars, node] = this._radixTree.getMaxMatch(
+      word,
+      radixNode
+    );
 
-    if (searchResult === undefined) {
-      return undefined;
+    if (found) {
+      return this._bytecodes.get(word);
     }
 
-    if (!BytecodeTrie.isBytecodeTrie(searchResult)) {
-      return searchResult;
+    // The entire string is present as a prefix, but not exactly
+    if (word.length === matchedChars) {
+      return undefined;
     }
 
     // Deployment messages have their abi-encoded arguments at the end of the bytecode.
@@ -158,16 +104,28 @@ export class ContractsIdentifier {
     //
     // We take advantage of this last observation, and just return the bytecode that exactly
     // matched the searchResult (sub)trie that we got.
+    const entireNodeMatched =
+      matchedChars === node.charsMatchedBefore + node.edgeLabel.length;
+    const notEntireBytecodeFound = matchedChars < word.length;
     if (
       isCreateTrace(trace) &&
-      searchResult.match !== undefined &&
-      searchResult.match.isDeployment
+      entireNodeMatched &&
+      notEntireBytecodeFound &&
+      node.isPresent
     ) {
-      return searchResult.match;
+      const bytecode = this._bytecodes.get(
+        word.substring(0, node.charsMatchedBefore) + node.edgeLabel
+      )!;
+
+      if (bytecode.isDeployment) {
+        return bytecode;
+      }
     }
 
     if (normalizeLibraries) {
-      for (const bytecodeWithLibraries of searchResult.descendants) {
+      for (const suffix of this._radixTree.getDescendantSuffixes(node)) {
+        const descendant = word.substring(0, node.charsMatchedBefore) + suffix;
+        const bytecodeWithLibraries = this._bytecodes.get(descendant)!;
         if (
           bytecodeWithLibraries.libraryAddressPositions.length === 0 &&
           bytecodeWithLibraries.immutableReferences.length === 0
@@ -185,12 +143,11 @@ export class ContractsIdentifier {
           bytecodeWithLibraries.immutableReferences
         );
 
-        const normalizedResult = this._searchBytecode(
+        const normalizedResult = this._searchBytecodeOnRadixTree(
           trace,
           normalizedCode,
           false,
-          searchResult,
-          searchResult.depth + 1
+          node
         );
 
         if (normalizedResult !== undefined) {
@@ -205,13 +162,18 @@ export class ContractsIdentifier {
     // of the metadata. If that's the case, we can assume that any descendant will be a valid
     // Bytecode, so we just choose the most recently added one.
     //
-    // The reason this works is because there's no chance that Solidity includes an entire
+    // The reason this works is that there's no chance that Solidity includes an entire
     // bytecode (i.e. with metadata), as a prefix of another one.
-    if (
-      this._isMatchingMetadata(code, searchResult.depth) &&
-      searchResult.descendants.length > 0
-    ) {
-      return searchResult.descendants[searchResult.descendants.length - 1];
+    if (this._isMatchingMetadata(code, matchedChars)) {
+      const suffixes = Array.from(this._radixTree.getDescendantSuffixes(node));
+
+      if (suffixes.length > 0) {
+        // TODO: this should be the last one in chronological insertion order
+        const descendant =
+          word.substring(0, node.charsMatchedBefore) +
+          suffixes[suffixes.length - 1];
+        return this._bytecodes.get(descendant)!;
+      }
     }
 
     return undefined;
