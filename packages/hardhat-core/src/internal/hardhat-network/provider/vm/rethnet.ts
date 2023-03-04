@@ -393,6 +393,10 @@ export class RethnetAdapter implements VMAdapter {
     return this._state.makeSnapshot();
   }
 
+  public async removeSnapshot(stateRoot: Buffer): Promise<boolean> {
+    return this._state.removeSnapshot(stateRoot);
+  }
+
   public getLastTrace(): {
     trace: MessageTrace | undefined;
     error: Error | undefined;

@@ -62,6 +62,10 @@ export class RethnetStateManager {
     return this._state.makeSnapshot();
   }
 
+  public async removeSnapshot(stateRoot: Buffer): Promise<boolean> {
+    return this._state.removeSnapshot(stateRoot);
+  }
+
   public async modifyAccount(
     address: Address,
     modifyAccountFn: (

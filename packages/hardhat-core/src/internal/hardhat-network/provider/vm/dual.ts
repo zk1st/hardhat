@@ -315,6 +315,15 @@ export class DualModeAdapter implements VMAdapter {
     return rethnetRoot;
   }
 
+  public async removeSnapshot(stateRoot: Buffer): Promise<boolean> {
+    const _ethereumJSSuccess = await this._ethereumJSAdapter.removeSnapshot(
+      stateRoot
+    );
+    const rethnetSuccess = await this._rethnetAdapter.removeSnapshot(stateRoot);
+
+    return rethnetSuccess;
+  }
+
   public getLastTrace(): {
     trace: MessageTrace | undefined;
     error: Error | undefined;

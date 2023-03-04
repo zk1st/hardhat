@@ -442,6 +442,11 @@ export class EthereumJSAdapter implements VMAdapter {
     return this.getStateRoot();
   }
 
+  public async removeSnapshot(_stateRoot: Buffer): Promise<boolean> {
+    // No way of deleting snapshot
+    return true;
+  }
+
   public getLastTrace(): {
     trace: MessageTrace | undefined;
     error: Error | undefined;
