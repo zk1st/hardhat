@@ -2,6 +2,7 @@ mod debug;
 mod layered_state;
 mod remote;
 mod request;
+mod storage;
 mod sync;
 
 use rethnet_eth::B256;

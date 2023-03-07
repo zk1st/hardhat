@@ -1,9 +1,6 @@
 use hashbrown::HashMap;
 use rethnet_eth::{
-    account::BasicAccount,
-    state::{state_root, storage_root},
-    trie::KECCAK_NULL_RLP,
-    Address, B256, U256,
+    account::BasicAccount, state::state_root2, trie::KECCAK_NULL_RLP, Address, B256, U256,
 };
 use revm::{
     db::State,
@@ -11,7 +8,7 @@ use revm::{
     DatabaseCommit,
 };
 
-use super::{StateDebug, StateError};
+use super::{storage::RethnetStorage, StateDebug, StateError};
 
 /// A state consisting of layers.
 #[derive(Clone, Debug)]
@@ -60,6 +57,11 @@ impl<Layer: Clone> LayeredState<Layer> {
     pub fn iter(&self) -> impl Iterator<Item = &Layer> {
         self.stack.iter().rev()
     }
+
+    /// Returns a mutable iterator over the object's layers.
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Layer> {
+        self.stack.iter_mut().rev()
+    }
 }
 
 impl<Layer: Clone + Default> LayeredState<Layer> {
@@ -85,7 +87,7 @@ pub struct RethnetLayer {
     /// Address -> AccountInfo
     account_infos: HashMap<Address, Option<AccountInfo>>,
     /// Address -> Storage
-    storage: HashMap<Address, Option<HashMap<U256, U256>>>,
+    storage: HashMap<Address, Option<RethnetStorage>>,
     /// Code hash -> Address
     contracts: HashMap<B256, Bytecode>,
     /// Cached state root
@@ -285,7 +287,7 @@ impl DatabaseCommit for LayeredState<RethnetLayer> {
 
                     let was_deleted = storage.is_none();
                     if was_deleted {
-                        storage.replace(HashMap::new());
+                        storage.replace(RethnetStorage::default());
                     }
 
                     storage.as_mut().unwrap()
@@ -306,7 +308,7 @@ impl DatabaseCommit for LayeredState<RethnetLayer> {
                 };
 
                 if account.storage_cleared {
-                    storage.clear();
+                    *storage = RethnetStorage::default();
                 }
 
                 account.storage.into_iter().for_each(|(index, value)| {
@@ -327,9 +329,13 @@ impl StateDebug for LayeredState<RethnetLayer> {
 
     fn account_storage_root(&mut self, address: &Address) -> Result<Option<B256>, Self::Error> {
         Ok(self
-            .iter()
-            .find_map(|layer| layer.storage.get(address))
-            .map(|storage| storage.as_ref().map_or(KECCAK_NULL_RLP, storage_root)))
+            .iter_mut()
+            .find_map(|layer| layer.storage.get_mut(address))
+            .map(|storage| {
+                storage
+                    .as_mut()
+                    .map_or(KECCAK_NULL_RLP, RethnetStorage::storage_root)
+            }))
     }
 
     fn insert_account(
@@ -411,7 +417,7 @@ impl StateDebug for LayeredState<RethnetLayer> {
             .and_modify(|entry| {
                 let was_deleted = entry.is_none();
                 if was_deleted {
-                    entry.replace(HashMap::new());
+                    entry.replace(RethnetStorage::default());
                 }
 
                 entry.as_mut().unwrap().insert(index, value);
@@ -420,7 +426,7 @@ impl StateDebug for LayeredState<RethnetLayer> {
                 let mut account_storage = HashMap::new();
                 account_storage.insert(index, value);
 
-                Some(account_storage)
+                Some(account_storage.into())
             });
 
         Ok(())
@@ -468,7 +474,7 @@ impl StateDebug for LayeredState<RethnetLayer> {
         let storage_roots: HashMap<Address, B256> = storage
             .into_iter()
             .filter_map(|(address, storage)| {
-                storage.map(|storage| (address, storage_root(&storage)))
+                storage.map(|mut storage| (address, storage.storage_root()))
             })
             .collect();
 
@@ -497,7 +503,7 @@ impl StateDebug for LayeredState<RethnetLayer> {
             .filter_map(|(address, account)| account.map(|account| (address, account)))
             .collect();
 
-        Ok(state_root(&state))
+        Ok(state_root2(&state))
     }
 
     fn checkpoint(&mut self) -> Result<(), Self::Error> {
