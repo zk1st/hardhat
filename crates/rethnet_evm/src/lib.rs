@@ -4,6 +4,9 @@
 //! Virtual Machine (or EVM).
 #![warn(missing_docs)]
 
+#[global_allocator]
+static ALLOC: rpmalloc::RpMalloc = rpmalloc::RpMalloc;
+
 pub use hashbrown::HashMap;
 
 pub use revm::{
