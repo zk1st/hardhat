@@ -1,4 +1,7 @@
 use hashbrown::HashMap;
+use memory_db::{HashKey, MemoryDB};
+use reference_trie::RefSecTrieDBMut;
+use trie_db::TrieMut;
 
 use crate::{account::BasicAccount, trie::sec_trie_root, Address, B256, U256};
 
@@ -16,12 +19,54 @@ pub fn state_root(state: &State) -> B256 {
     }))
 }
 
+/// Calculates the state root hash of the provided state.
+pub fn state_root2(state: &State) -> B256 {
+    let mut db = MemoryDB::<_, HashKey<_>, _>::default();
+    let mut root = Default::default();
+
+    {
+        let mut trie = RefSecTrieDBMut::new(&mut db, &mut root);
+        state
+            .iter()
+            .map(|(address, account)| {
+                let account = rlp::encode(account);
+                (address, account)
+            })
+            .for_each(|(address, value)| {
+                trie.insert(address.as_ref(), value.as_ref()).unwrap();
+            });
+    }
+
+    B256::from(root)
+}
+
 /// Calculates the storage root hash of the provided storage.
 pub fn storage_root(storage: &Storage) -> B256 {
     sec_trie_root(storage.iter().map(|(index, value)| {
         let value = rlp::encode(value);
         (index.to_be_bytes::<32>(), value)
     }))
+}
+
+/// Calculates the storage root hash of the provided storage.
+pub fn storage_root2(storage: &Storage) -> B256 {
+    let mut db = MemoryDB::<_, HashKey<_>, _>::default();
+    let mut root = Default::default();
+
+    {
+        let mut trie = RefSecTrieDBMut::new(&mut db, &mut root);
+        storage
+            .iter()
+            .map(|(index, value)| {
+                let value = rlp::encode(value);
+                (index.to_be_bytes::<32>(), value)
+            })
+            .for_each(|(index, value)| {
+                trie.insert(&index, value.as_ref()).unwrap();
+            });
+    }
+
+    B256::from(root)
 }
 
 #[cfg(test)]
