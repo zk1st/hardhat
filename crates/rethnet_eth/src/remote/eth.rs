@@ -10,7 +10,9 @@ pub mod eip712;
 
 use std::fmt::Debug;
 
-use crate::{Address, Bloom, Bytes, B256, U256};
+use revm_primitives::ruint::aliases::B64;
+
+use crate::{utils::B64Def, Address, Bloom, Bytes, B256, U256};
 
 use super::{serde_with_helpers::optional_u64_from_hex, withdrawal::Withdrawal};
 
@@ -134,46 +136,31 @@ pub struct Block<TX>
 where
     TX: Debug + Default + Clone + PartialEq + Eq,
 {
-    pub hash: Option<B256>,
+    pub hash: B256,
     pub parent_hash: B256,
     pub sha3_uncles: B256,
-    pub author: Option<Address>,
+    pub miner: Address,
     pub state_root: B256,
     pub transactions_root: B256,
     pub receipts_root: B256,
-    pub number: Option<U256>,
-    pub gas_used: U256,
-    pub gas_limit: U256,
-    pub extra_data: Bytes,
-    pub logs_bloom: Option<Bloom>,
-    #[serde(default)]
-    pub timestamp: U256,
-    #[serde(default)]
+    pub logs_bloom: Bloom,
     pub difficulty: U256,
+    pub number: U256,
+    pub gas_limit: U256,
+    pub gas_used: U256,
+    pub timestamp: U256,
+    pub extra_data: Bytes,
+    pub mix_hash: B256,
+    #[serde(with = "B64Def")]
+    pub nonce: B64,
     pub total_difficulty: Option<U256>,
-    #[serde(default, deserialize_with = "deserialize_null_default")]
-    pub seal_fields: Vec<Bytes>,
-    #[serde(default)]
-    pub uncles: Vec<B256>,
+    pub base_fee_per_gas: Option<U256>,
+    pub withdrawals_root: Option<B256>,
+    pub size: U256,
     #[serde(default)]
     pub transactions: Vec<TX>,
-    pub size: Option<U256>,
-    pub mix_hash: Option<B256>,
-    pub nonce: Option<U256>,
-    pub base_fee_per_gas: Option<U256>,
-    pub miner: Address,
     #[serde(default)]
     pub withdrawals: Vec<Withdrawal>,
     #[serde(default)]
-    pub withdrawals_root: B256,
-}
-
-fn deserialize_null_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
-where
-    T: Default + serde::Deserialize<'de>,
-    D: serde::Deserializer<'de>,
-{
-    use serde::Deserialize;
-    let opt = Option::deserialize(deserializer)?;
-    Ok(opt.unwrap_or_default())
+    pub uncles: Vec<B256>,
 }
