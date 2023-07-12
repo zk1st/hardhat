@@ -7,7 +7,9 @@ use revm_primitives::keccak256;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use ruint::aliases::{U160, U64};
 
-use crate::{transaction::SignedTransaction, trie, Address, Bloom, Bytes, B256, B64, U256};
+use crate::{
+    transaction::SignedTransaction, trie, utils::B64Def, Address, Bloom, Bytes, B256, B64, U256,
+};
 
 /// Ethereum block
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -103,18 +105,6 @@ pub struct Header {
     pub base_fee_per_gas: Option<U256>,
     /// WithdrawalsHash was added by EIP-4895 and is ignored in legacy headers.
     pub withdrawals_root: Option<B256>,
-}
-
-#[cfg(feature = "serde")]
-#[derive(serde::Serialize, serde::Deserialize)]
-#[serde(remote = "B64")]
-struct B64Def(#[serde(getter = "B64::as_uint")] ruint::aliases::U64);
-
-#[cfg(feature = "serde")]
-impl From<B64Def> for B64 {
-    fn from(def: B64Def) -> Self {
-        def.0.into()
-    }
 }
 
 impl Header {

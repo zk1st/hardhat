@@ -38,3 +38,16 @@ where
 
     keccak256(&eth_message)
 }
+
+/// Helper type for (de)serializing a `B64`.
+#[cfg(feature = "serde")]
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(remote = "crate::B64")]
+pub struct B64Def(#[serde(getter = "crate::B64::as_uint")] ruint::aliases::U64);
+
+#[cfg(feature = "serde")]
+impl From<B64Def> for crate::B64 {
+    fn from(def: B64Def) -> Self {
+        def.0.into()
+    }
+}
