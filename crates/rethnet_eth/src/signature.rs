@@ -79,7 +79,7 @@ pub enum RecoveryMessage {
 pub struct Signature {
     /// R value
     pub r: U256,
-    /// S Value
+    /// S value
     pub s: U256,
     /// V value
     pub v: u64,

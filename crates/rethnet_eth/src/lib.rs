@@ -29,7 +29,7 @@ pub mod trie;
 pub mod utils;
 
 pub use bytes::Bytes;
-pub use ethbloom::Bloom;
+pub use ethereum_types::Bloom;
 pub use revm_primitives::{Address, B160, B256, U256};
 pub use ruint::aliases::{B512, B64, U64};
 

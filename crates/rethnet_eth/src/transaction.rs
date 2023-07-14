@@ -4,6 +4,7 @@
 
 //! transaction related data
 
+mod finalized;
 mod kind;
 mod request;
 mod signed;
@@ -14,6 +15,7 @@ use crate::{
 };
 
 pub use self::{
+    finalized::FinalizedTransaction,
     kind::TransactionKind,
     request::{
         EIP1559TransactionRequest, EIP2930TransactionRequest, LegacyTransactionRequest,

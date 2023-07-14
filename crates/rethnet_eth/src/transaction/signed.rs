@@ -19,6 +19,7 @@ pub use self::{
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(untagged))]
 pub enum SignedTransaction {
     /// Legacy transaction type
     Legacy(LegacySignedTransaction),

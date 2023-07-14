@@ -16,15 +16,28 @@ use crate::{
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct EIP2930SignedTransaction {
     pub chain_id: u64,
+    /// The number of transactions made by the sender prior to this one
     pub nonce: u64,
+    /// Gas price provided by the sender in Wei
     pub gas_price: U256,
+    /// Gas provided by the sender
+    #[cfg_attr(feature = "serde", serde(rename = "gas"))]
     pub gas_limit: u64,
+    /// The kind of transaction
+    #[cfg_attr(feature = "serde", serde(rename = "to"))]
     pub kind: TransactionKind,
+    /// Value transferred in Wei
     pub value: U256,
+    /// The data send along with the transaction
     pub input: Bytes,
+    #[cfg_attr(feature = "serde", serde(default))]
     pub access_list: AccessList,
+    /// ECDSA recovery id
+    #[cfg_attr(feature = "serde", serde(rename = "v"))]
     pub odd_y_parity: bool,
+    /// ECDSA signature r-value
     pub r: B256,
+    /// ECDSA signature s-value
     pub s: B256,
 }
 

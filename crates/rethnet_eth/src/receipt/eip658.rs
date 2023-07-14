@@ -1,4 +1,4 @@
-use ethbloom::Bloom;
+use ethereum_types::Bloom;
 use revm_primitives::U256;
 
 use crate::log::Log;

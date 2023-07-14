@@ -3,7 +3,6 @@ use rlp::{DecoderError, Rlp, RlpStream};
 use ruint::aliases::U160;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum TransactionKind {
     Call(Address),
     Create,
@@ -44,5 +43,29 @@ impl rlp::Decodable for TransactionKind {
                 Address::from(address)
             }))
         }
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for TransactionKind {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        Ok(if let Some(to) = Option::deserialize(deserializer)? {
+            Self::Call(to)
+        } else {
+            Self::Create
+        })
+    }
+}
+
+#[cfg(feature = "serde")]
+impl serde::Serialize for TransactionKind {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.as_call().serialize(serializer)
     }
 }

@@ -1,7 +1,7 @@
 #![allow(missing_docs)]
 
 use bytes::Bytes;
-use ethbloom::Bloom;
+use ethereum_types::{Bloom, BloomInput};
 use revm_primitives::{Address, B256, U256};
 use ruint::aliases::U160;
 
@@ -20,11 +20,11 @@ pub struct Log {
 impl Log {
     /// Adds the log to a bloom hash.
     pub fn add_to_bloom(&self, bloom: &mut Bloom) {
-        bloom.accrue(ethbloom::Input::Raw(self.address.as_bytes()));
+        bloom.accrue(BloomInput::Raw(self.address.as_bytes()));
 
         self.topics
             .iter()
-            .for_each(|topic| bloom.accrue(ethbloom::Input::Raw(topic.as_bytes())));
+            .for_each(|topic| bloom.accrue(BloomInput::Raw(topic.as_bytes())));
     }
 }
 

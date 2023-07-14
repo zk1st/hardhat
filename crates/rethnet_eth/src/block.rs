@@ -3,13 +3,12 @@
 // - https://github.com/foundry-rs/foundry/blob/01b16238ff87dc7ca8ee3f5f13e389888c2a2ee4/LICENSE-MIT
 // For the original context see: https://github.com/foundry-rs/foundry/blob/01b16238ff87dc7ca8ee3f5f13e389888c2a2ee4/anvil/core/src/eth/block.rs
 
+use ethereum_types::H64;
 use revm_primitives::keccak256;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
-use ruint::aliases::{U160, U64};
+use ruint::aliases::U160;
 
-use crate::{
-    transaction::SignedTransaction, trie, utils::B64Def, Address, Bloom, Bytes, B256, B64, U256,
-};
+use crate::{transaction::SignedTransaction, trie, Address, Bloom, Bytes, B256, U256};
 
 /// Ethereum block
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -99,8 +98,7 @@ pub struct Header {
     /// The block's mix hash
     pub mix_hash: B256,
     /// The block's nonce
-    #[cfg_attr(feature = "serde", serde(with = "B64Def"))]
-    pub nonce: B64,
+    pub nonce: H64,
     /// BaseFee was added by EIP-1559 and is ignored in legacy headers.
     pub base_fee_per_gas: Option<U256>,
     /// WithdrawalsHash was added by EIP-4895 and is ignored in legacy headers.
@@ -203,7 +201,7 @@ impl rlp::Encodable for Header {
         s.append(&self.timestamp);
         s.append(&self.extra_data);
         s.append(&ruint::aliases::B256::from_be_bytes(self.mix_hash.0));
-        s.append(&self.nonce.to_le_bytes::<8>().as_ref());
+        s.append(&self.nonce);
         if let Some(ref base_fee) = self.base_fee_per_gas {
             s.append(base_fee);
         }
@@ -230,7 +228,7 @@ impl rlp::Decodable for Header {
             timestamp: rlp.val_at(11)?,
             extra_data: rlp.val_at::<Vec<u8>>(12)?.into(),
             mix_hash: B256::from(rlp.val_at::<U256>(13)?.to_be_bytes()),
-            nonce: B64::from_le_bytes(rlp.val_at::<U64>(14)?.to_be_bytes::<8>()),
+            nonce: rlp.val_at::<H64>(14)?,
             base_fee_per_gas: if let Ok(base_fee) = rlp.at(15) {
                 Some(<U256 as Decodable>::decode(&base_fee)?)
             } else {
@@ -347,7 +345,7 @@ pub struct PartialHeader {
     /// The block's mix hash
     pub mix_hash: B256,
     /// The block's nonce
-    pub nonce: B64,
+    pub nonce: H64,
     /// BaseFee was added by EIP-1559 and is ignored in legacy headers.
     pub base_fee: Option<U256>,
 }
@@ -377,8 +375,6 @@ impl From<Header> for PartialHeader {
 mod tests {
     use std::str::FromStr;
 
-    use ruint::uint;
-
     use super::*;
 
     #[test]
@@ -398,7 +394,7 @@ mod tests {
             timestamp: U256::ZERO,
             extra_data: Default::default(),
             mix_hash: Default::default(),
-            nonce: B64::from(uint!(99_U64)),
+            nonce: 99u64.to_be_bytes().into(),
             base_fee_per_gas: None,
             withdrawals_root: None,
         };
@@ -523,7 +519,7 @@ mod tests {
                 "0000000000000000000000000000000000000000000000000000000000000000",
             )
             .unwrap(),
-            nonce: B64::from(uint!(0x0_U64)),
+            nonce: 0u64.to_be_bytes().into(),
             base_fee_per_gas: Some(U256::from(0x036bu64)),
             withdrawals_root: None,
         };

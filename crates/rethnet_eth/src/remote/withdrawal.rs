@@ -1,5 +1,5 @@
 use revm_primitives::{Address, U256};
-use ruint::aliases::{U128, U160};
+use ruint::aliases::U160;
 
 /// Ethereum withdrawal
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -7,9 +7,9 @@ use ruint::aliases::{U128, U160};
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct Withdrawal {
     /// The index of withdrawal
-    pub index: U128,
+    pub index: u64,
     /// The index of the validator that generated the withdrawal
-    pub validator_index: U128,
+    pub validator_index: u64,
     /// The recipient address for withdrawal value
     pub address: Address,
     /// The value contained in withdrawal

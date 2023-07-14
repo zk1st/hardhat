@@ -6,6 +6,8 @@ use std::{
 use itertools::Itertools;
 use revm_primitives::{AccountInfo, Address, Bytecode, B256, KECCAK_EMPTY, U256};
 
+use crate::transaction::FinalizedTransaction;
+
 use super::{
     eth,
     jsonrpc::{self, Request},
@@ -328,7 +330,7 @@ impl RpcClient {
     pub async fn get_block_by_hash_with_transaction_data(
         &self,
         hash: &B256,
-    ) -> Result<Option<eth::Block<eth::Transaction>>, RpcClientError> {
+    ) -> Result<Option<eth::Block<FinalizedTransaction>>, RpcClientError> {
         self.call(&MethodInvocation::GetBlockByHash(*hash, true))
             .await
     }
@@ -346,7 +348,7 @@ impl RpcClient {
     pub async fn get_block_by_number_with_transaction_data(
         &self,
         spec: BlockSpec,
-    ) -> Result<eth::Block<eth::Transaction>, RpcClientError> {
+    ) -> Result<eth::Block<FinalizedTransaction>, RpcClientError> {
         self.call(&MethodInvocation::GetBlockByNumber(spec, true))
             .await
     }
@@ -370,7 +372,7 @@ impl RpcClient {
     pub async fn get_transaction_by_hash(
         &self,
         tx_hash: &B256,
-    ) -> Result<Option<eth::Transaction>, RpcClientError> {
+    ) -> Result<Option<FinalizedTransaction>, RpcClientError> {
         self.call(&MethodInvocation::GetTransactionByHash(*tx_hash))
             .await
     }
@@ -437,7 +439,7 @@ mod tests {
                 .expect("failed to parse hash from string");
 
         let error = RpcClient::new(&server.url())
-            .call::<Option<eth::Transaction>>(&MethodInvocation::GetTransactionByHash(hash))
+            .call::<Option<FinalizedTransaction>>(&MethodInvocation::GetTransactionByHash(hash))
             .await
             .expect_err("should have failed to interpret response as a Transaction");
 
@@ -455,9 +457,11 @@ mod tests {
 
     #[cfg(feature = "test-remote")]
     mod alchemy {
-        use crate::Bytes;
+        use crate::{remote::BlockTag, signature::Signature, Bytes};
 
         use super::*;
+
+        use crate::transaction::FinalizedTransaction;
 
         fn get_alchemy_url() -> String {
             match std::env::var_os("ALCHEMY_URL")
@@ -480,7 +484,7 @@ mod tests {
             .expect("failed to parse hash from string");
 
             let error = RpcClient::new(alchemy_url)
-                .call::<Option<eth::Transaction>>(&MethodInvocation::GetTransactionByHash(hash))
+                .call::<Option<FinalizedTransaction>>(&MethodInvocation::GetTransactionByHash(hash))
                 .await
                 .expect_err("should have failed to interpret response as a Transaction");
 
@@ -501,7 +505,7 @@ mod tests {
             .expect("failed to parse hash from string");
 
             let error = RpcClient::new(alchemy_url)
-                .call::<Option<eth::Transaction>>(&MethodInvocation::GetTransactionByHash(hash))
+                .call::<Option<FinalizedTransaction>>(&MethodInvocation::GetTransactionByHash(hash))
                 .await
                 .expect_err("should have failed to connect due to a garbage domain name");
 
@@ -672,7 +676,7 @@ mod tests {
                 .await
                 .expect("should have succeeded");
 
-            assert_eq!(block.number, Some(block_number));
+            assert_eq!(block.number, block_number);
             assert_eq!(block.transactions.len(), 102);
         }
 
@@ -705,7 +709,7 @@ mod tests {
                 .await
                 .expect("should have succeeded");
 
-            assert_eq!(block.number, Some(block_number));
+            assert_eq!(block.number, block_number);
             assert_eq!(block.transactions.len(), 102);
         }
 
@@ -733,6 +737,16 @@ mod tests {
 
             let _block = RpcClient::new(&alchemy_url)
                 .get_block_by_number(BlockSpec::latest())
+                .await
+                .expect("should have succeeded");
+        }
+
+        #[tokio::test]
+        async fn get_pending_block() {
+            let alchemy_url = get_alchemy_url();
+
+            let _block = RpcClient::new(&alchemy_url)
+                .get_block_by_number(BlockSpec::Tag(BlockTag::Pending))
                 .await
                 .expect("should have succeeded");
         }
@@ -829,17 +843,15 @@ mod tests {
             let tx = tx.unwrap();
 
             assert_eq!(
-                tx.block_hash,
-                Some(
-                    B256::from_str(
-                        "0x88fadbb673928c61b9ede3694ae0589ac77ae38ec90a24a6e12e83f42f18c7e8"
-                    )
-                    .expect("couldn't parse data")
+                tx.hash(),
+                B256::from_str(
+                    "0x88fadbb673928c61b9ede3694ae0589ac77ae38ec90a24a6e12e83f42f18c7e8"
                 )
+                .expect("couldn't parse data")
             );
             assert_eq!(
                 tx.block_number,
-                Some(U256::from_str_radix("a74fde", 16).expect("couldn't parse data"))
+                U256::from_str_radix("a74fde", 16).expect("couldn't parse data")
             );
             assert_eq!(tx.hash, hash);
             assert_eq!(
@@ -848,39 +860,39 @@ mod tests {
                     .expect("couldn't parse data")
             );
             assert_eq!(
-                tx.gas,
+                U256::from(tx.gas_limit()),
                 U256::from_str_radix("30d40", 16).expect("couldn't parse data")
             );
             assert_eq!(
-                tx.gas_price,
-                Some(U256::from_str_radix("1e449a99b8", 16).expect("couldn't parse data"))
+                tx.gas_price(),
+                U256::from_str_radix("1e449a99b8", 16).expect("couldn't parse data")
             );
             assert_eq!(
-            tx.input,
+            *tx.data(),
             Bytes::from("0xa9059cbb000000000000000000000000e2c1e729e05f34c07d80083982ccd9154045dcc600000000000000000000000000000000000000000000000000000004a817c800")
         );
             assert_eq!(
-                tx.nonce,
+                U256::from(*tx.nonce()),
                 U256::from_str_radix("653b", 16).expect("couldn't parse data")
             );
             assert_eq!(
-                tx.r,
-                U256::from_str_radix(
-                    "eb56df45bd355e182fba854506bc73737df275af5a323d30f98db13fdf44393a",
-                    16
-                )
-                .expect("couldn't parse data")
+                tx.signature(),
+                Signature {
+                    r: U256::from_str_radix(
+                        "eb56df45bd355e182fba854506bc73737df275af5a323d30f98db13fdf44393a",
+                        16
+                    )
+                    .expect("couldn't parse data"),
+                    s: U256::from_str_radix(
+                        "2c6efcd210cdc7b3d3191360f796ca84cab25a52ed8f72efff1652adaabc1c83",
+                        16
+                    )
+                    .expect("couldn't parse data"),
+                    v: u64::from_str_radix("1c", 16).expect("couldn't parse data"),
+                }
             );
             assert_eq!(
-                tx.s,
-                U256::from_str_radix(
-                    "2c6efcd210cdc7b3d3191360f796ca84cab25a52ed8f72efff1652adaabc1c83",
-                    16
-                )
-                .expect("couldn't parse data")
-            );
-            assert_eq!(
-                tx.to,
+                tx.to().cloned(),
                 Some(
                     Address::from_str("dac17f958d2ee523a2206206994597c13d831ec7")
                         .expect("couldn't parse data")
@@ -888,14 +900,10 @@ mod tests {
             );
             assert_eq!(
                 tx.transaction_index,
-                Some(u64::from_str_radix("88", 16).expect("couldn't parse data"))
+                usize::from_str_radix("88", 16).expect("couldn't parse data")
             );
             assert_eq!(
-                tx.v,
-                u64::from_str_radix("1c", 16).expect("couldn't parse data")
-            );
-            assert_eq!(
-                tx.value,
+                tx.value(),
                 U256::from_str_radix("0", 16).expect("couldn't parse data")
             );
         }

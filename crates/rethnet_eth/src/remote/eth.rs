@@ -10,9 +10,9 @@ pub mod eip712;
 
 use std::fmt::Debug;
 
-use revm_primitives::ruint::aliases::B64;
+use ethereum_types::U64;
 
-use crate::{utils::B64Def, Address, Bloom, Bytes, B256, U256};
+use crate::{Address, Bloom, Bytes, B256, U256};
 
 use super::{serde_with_helpers::optional_u64_from_hex, withdrawal::Withdrawal};
 
@@ -22,44 +22,6 @@ use super::{serde_with_helpers::optional_u64_from_hex, withdrawal::Withdrawal};
 pub struct AccessListEntry {
     address: Address,
     storage_keys: Vec<U256>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Default, serde::Deserialize, serde::Serialize)]
-#[serde(deny_unknown_fields)]
-#[serde(rename_all = "camelCase")]
-pub struct Transaction {
-    /// The transaction's hash
-    pub hash: B256,
-    pub nonce: U256,
-    pub block_hash: Option<B256>,
-    pub block_number: Option<U256>,
-    #[serde(deserialize_with = "optional_u64_from_hex")]
-    pub transaction_index: Option<u64>,
-    pub from: Address,
-    pub to: Option<Address>,
-    pub value: U256,
-    pub gas_price: Option<U256>,
-    pub gas: U256,
-    pub input: Bytes,
-    #[serde(deserialize_with = "u64_from_hex")]
-    pub v: u64,
-    pub r: U256,
-    pub s: U256,
-    #[serde(default, deserialize_with = "optional_u64_from_hex")]
-    pub chain_id: Option<u64>,
-    #[serde(
-        rename = "type",
-        default,
-        skip_serializing_if = "Option::is_none",
-        deserialize_with = "optional_u64_from_hex"
-    )]
-    pub transaction_type: Option<u64>,
-    #[serde(default)]
-    pub access_list: Option<Vec<AccessListEntry>>,
-    #[serde(default)]
-    pub max_fee_per_gas: Option<U256>,
-    #[serde(default)]
-    pub max_priority_fee_per_gas: Option<U256>,
 }
 
 fn u64_from_hex<'de, D>(deserializer: D) -> Result<u64, D::Error>
@@ -129,38 +91,58 @@ pub struct TransactionReceipt {
     pub transaction_type: Option<u64>,
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+/// Represents a JSON-RPC Ethereum block.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
-pub struct Block<TX>
-where
-    TX: Debug + Default + Clone + PartialEq + Eq,
-{
-    pub hash: B256,
+pub struct Block<TX> {
+    /// Block hash
+    pub hash: Option<B256>,
+    /// Parent block hash
     pub parent_hash: B256,
+    /// Ommers hash
     pub sha3_uncles: B256,
+    /// Coinbase
     pub miner: Address,
+    /// State root
     pub state_root: B256,
+    /// Transactions root
     pub transactions_root: B256,
+    /// Receipts root
     pub receipts_root: B256,
+    /// Bloom filter
     pub logs_bloom: Bloom,
+    /// Block difficulty
     pub difficulty: U256,
+    /// Block number
     pub number: U256,
+    /// Gas limit
     pub gas_limit: U256,
+    /// Gas used
     pub gas_used: U256,
+    /// Timestamp
     pub timestamp: U256,
+    /// Extra data
     pub extra_data: Bytes,
+    /// Mix hash
     pub mix_hash: B256,
-    #[serde(with = "B64Def")]
-    pub nonce: B64,
+    /// Nonce
+    pub nonce: Option<U64>,
+    /// Total difficulty
     pub total_difficulty: Option<U256>,
+    /// Base fee per gas
     pub base_fee_per_gas: Option<U256>,
+    /// Withdrawals root
     pub withdrawals_root: Option<B256>,
+    /// Size
     pub size: U256,
-    #[serde(default)]
+    /// Transactions (can be hashes or full)
+    #[serde(default = "Vec::new")]
     pub transactions: Vec<TX>,
-    #[serde(default)]
+    /// Withdrawals
+    #[serde(default = "Vec::new")]
     pub withdrawals: Vec<Withdrawal>,
-    #[serde(default)]
+    /// Uncle hashes
+    #[serde(default = "Vec::new")]
     pub uncles: Vec<B256>,
 }
