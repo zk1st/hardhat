@@ -1,5 +1,5 @@
 import { Block, HeaderData } from "@nomicfoundation/ethereumjs-block";
-import { Common } from "@nomicfoundation/ethereumjs-common";
+import { Common, CustomCommonOpts } from "@nomicfoundation/ethereumjs-common";
 import {
   AccessListEIP2930Transaction,
   FeeMarketEIP1559Transaction,
@@ -146,6 +146,7 @@ export class HardhatNode extends EventEmitter {
       networkId,
       chainId,
       allowBlocksWithSameTimestamp,
+      enableTransientStorage,
     } = config;
 
     const allowUnlimitedContractSize =
@@ -260,6 +261,8 @@ export class HardhatNode extends EventEmitter {
       blockchain = hardhatBlockchain;
     }
 
+    console.log("ORiginal common", common.isActivatedEIP(1153));
+
     const txPool = new TxPool(stateManager, BigInt(blockGasLimit), common);
 
     const eei = new EEI(stateManager, common, blockchain);
@@ -303,7 +306,8 @@ export class HardhatNode extends EventEmitter {
       forkBlockNum,
       forkBlockHash,
       nextBlockBaseFeePerGas,
-      forkClient
+      forkClient,
+      enableTransientStorage
     );
 
     return [common, node];
@@ -390,7 +394,8 @@ Hardhat Network's forking functionality only works with blocks from at least spu
     private _forkBlockNumber?: bigint,
     private _forkBlockHash?: string,
     nextBlockBaseFee?: bigint,
-    private _forkClient?: JsonRpcClient
+    private _forkClient?: JsonRpcClient,
+    private readonly _enableTransientStorage: boolean = false
   ) {
     super();
 
@@ -2389,6 +2394,7 @@ Hardhat Network's forking functionality only works with blocks from at least spu
 
       originalCommon = (this._vm as any)._common;
 
+      console.log("HERE");
       (this._vm as any)._common = Common.custom(
         {
           chainId:
@@ -2400,8 +2406,11 @@ Hardhat Network's forking functionality only works with blocks from at least spu
         },
         {
           hardfork: this._selectHardfork(blockContext.header.number),
+          ...this._getTransientStorageSettings(),
         }
       );
+
+      ((this._vm.evm as EVM)._common as any) = this._vm._common;
 
       // If this VM is running without EIP4895, but the block has withdrawals,
       // we remove them and the withdrawal root from the block
@@ -2454,6 +2463,8 @@ Hardhat Network's forking functionality only works with blocks from at least spu
         (blockContext.header as any).baseFeePerGas = 0n;
       }
 
+      console.log(this._vm._common === (this._vm.evm as EVM)._common);
+
       return await this._vm.runTx({
         block: blockContext,
         tx,
@@ -2465,6 +2476,7 @@ Hardhat Network's forking functionality only works with blocks from at least spu
     } finally {
       if (originalCommon !== undefined) {
         (this._vm as any)._common = originalCommon;
+        ((this._vm.evm as EVM)._common as any) = this._vm._common;
       }
       await this._stateManager.setStateRoot(initialStateRoot);
     }
@@ -2740,6 +2752,7 @@ Hardhat Network's forking functionality only works with blocks from at least spu
         },
         {
           hardfork: this._selectHardfork(BigInt(blockNumber)),
+          ...this._getTransientStorageSettings(),
         }
       );
 
@@ -2749,5 +2762,17 @@ Hardhat Network's forking functionality only works with blocks from at least spu
         `Network id ${networkId} does not correspond to a network that Hardhat can trace`
       );
     }
+  }
+
+  private _getTransientStorageSettings(): Partial<CustomCommonOpts> {
+    console.log("_getTransientStorageSettings");
+    if (this._enableTransientStorage) {
+      console.log("_getTransientStorageSettings 1");
+      return { eips: [1153] };
+    }
+
+    console.log("_getTransientStorageSettings 2");
+
+    return {};
   }
 }

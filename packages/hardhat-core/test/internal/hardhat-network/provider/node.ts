@@ -1,5 +1,9 @@
 import { Common } from "@nomicfoundation/ethereumjs-common";
-import { TxData, TypedTransaction } from "@nomicfoundation/ethereumjs-tx";
+import {
+  Transaction,
+  TxData,
+  TypedTransaction,
+} from "@nomicfoundation/ethereumjs-tx";
 import { assert } from "chai";
 import {
   Address,
@@ -13,6 +17,7 @@ import { defaultHardhatNetworkParams } from "../../../../src/internal/core/confi
 import { HardhatNode } from "../../../../src/internal/hardhat-network/provider/node";
 import {
   ForkedNodeConfig,
+  LocalNodeConfig,
   NodeConfig,
   RunCallResult,
 } from "../../../../src/internal/hardhat-network/provider/node-types";
@@ -40,6 +45,7 @@ import {
 } from "../helpers/providers";
 import { sleep } from "../helpers/sleep";
 import { runFullBlock } from "./utils/runFullBlock";
+import { call } from "../../../fixture-projects/nested-node-project/top-caller-package-tester";
 
 interface ForkedBlock {
   networkName: string;
@@ -78,6 +84,7 @@ describe("HardhatNode", () => {
     coinbase: "0x0000000000000000000000000000000000000000",
     chains: defaultHardhatNetworkParams.chains,
     allowBlocksWithSameTimestamp: false,
+    enableTransientStorage: false,
   };
   const gasPrice = 20;
   let node: HardhatNode;
@@ -902,6 +909,7 @@ describe("HardhatNode", () => {
       mempoolOrder: "priority",
       coinbase: "0x0000000000000000000000000000000000000000",
       allowBlocksWithSameTimestamp: false,
+      enableTransientStorage: false,
     };
 
     describe("when forking with a default hardfork activation history", function () {
@@ -1068,6 +1076,7 @@ describe("HardhatNode", () => {
       mempoolOrder: "priority",
       coinbase: "0x0000000000000000000000000000000000000000",
       allowBlocksWithSameTimestamp: false,
+      enableTransientStorage: false,
     };
     const [, hardhatNode] = await HardhatNode.create(nodeConfig);
 
@@ -1083,5 +1092,68 @@ describe("HardhatNode", () => {
         hardhatNode
       )
     );
+  });
+
+  describe.only("enableTransientStorage", function () {
+    const TLOAD_DEPLOYMENT_BYTECODE = "0x60FFb3"; // PUSH1 FF TLOAD
+
+    const nodeConfig: LocalNodeConfig = {
+      automine: true,
+      chainId: 1,
+      networkId: 1,
+      hardfork: "london",
+      blockGasLimit: 1_000_000,
+      minGasPrice: 0n,
+      genesisAccounts: [],
+      chains: defaultHardhatNetworkParams.chains,
+      mempoolOrder: "priority",
+      coinbase: "0x0000000000000000000000000000000000000000",
+      allowBlocksWithSameTimestamp: false,
+      enableTransientStorage: false,
+    };
+
+    describe("When not enabled and on a fork that doesn't support it", function () {
+      it("Should revert if trying to run TLOAD", async function () {
+        const [, hardhatNode] = await HardhatNode.create(nodeConfig);
+
+        const callResult = await hardhatNode.runCall(
+          {
+            to: undefined,
+            from: toBuffer(DEFAULT_ACCOUNTS_ADDRESSES[0]),
+            data: toBuffer(TLOAD_DEPLOYMENT_BYTECODE),
+            value: 0n,
+            gasLimit: 1_000_000n,
+          },
+          0n
+        );
+
+        assert.isDefined(callResult.error);
+        assert.include(callResult.error!.message, "invalid opcode");
+      });
+    });
+
+    describe("When enabled", function () {
+      it("Should not revert if trying to run TLOAD", async function () {
+        const [, hardhatNode] = await HardhatNode.create({
+          ...nodeConfig,
+          enableTransientStorage: true,
+        });
+
+        const callResult = await hardhatNode.runCall(
+          {
+            to: undefined,
+            from: toBuffer(DEFAULT_ACCOUNTS_ADDRESSES[0]),
+            data: toBuffer(TLOAD_DEPLOYMENT_BYTECODE),
+            value: 0n,
+            gasLimit: 1_000_000n,
+          },
+          0n
+        );
+
+        console.log(callResult.error);
+        assert.isDefined(callResult.error);
+        assert.include(callResult.error!.message, "invalid opcode");
+      });
+    });
   });
 });
