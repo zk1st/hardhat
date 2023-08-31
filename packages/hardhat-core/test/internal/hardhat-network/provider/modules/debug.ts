@@ -20,7 +20,10 @@ import {
   assertInvalidInputError,
 } from "../../helpers/assertions";
 import { FORK_TESTS_CACHE_PATH } from "../../helpers/constants";
-import { EXAMPLE_CONTRACT } from "../../helpers/contracts";
+import {
+  EXAMPLE_CONTRACT,
+  EXAMPLE_SETTER_CONTRACT,
+} from "../../helpers/contracts";
 import { setCWD } from "../../helpers/cwd";
 import {
   DEFAULT_ACCOUNTS,
@@ -35,11 +38,15 @@ import { sendDummyTransaction } from "../../helpers/sendDummyTransaction";
 import { deployContract } from "../../helpers/transactions";
 import { assertEqualTraces } from "../utils/assertEqualTraces";
 import { numberToRpcQuantity } from "../../../../../src/internal/core/jsonrpc/types/base-types";
+import { jsTracerFixtures } from "../../../../fixture-debug-traces/jsTracerFixtures";
 
 // TODO: temporarily skip some of the tests because the latest version of ethereumjs
 // sometimes wrongly adds dummy empty words in the memory field
 describe("Debug module", function () {
-  PROVIDERS.forEach(({ name, useProvider }) => {
+  PROVIDERS.forEach(({ name, useProvider, isJsonRpc }) => {
+    if (isJsonRpc) {
+      return;
+    }
     describe(`${name} provider`, function () {
       setCWD();
       useProvider();
@@ -221,6 +228,41 @@ describe("Debug module", function () {
               structLogs: [],
             });
           });
+        });
+
+        describe.only("javascript tracers", function () {
+          for (const fixture of jsTracerFixtures) {
+            // eslint-disable-next-line no-only-tests/no-only-tests
+            const itFunction = fixture.only === true ? it.only : it;
+
+            itFunction(fixture.description, async function () {
+              const contractAddress = await deployContract(
+                this.provider,
+                `0x${EXAMPLE_SETTER_CONTRACT.bytecode.object}`,
+                DEFAULT_ACCOUNTS_ADDRESSES[0]
+              );
+
+              // send a transaction to the contract
+              const txHash = await this.provider.send("eth_sendTransaction", [
+                {
+                  from: DEFAULT_ACCOUNTS_ADDRESSES[0],
+                  to: contractAddress,
+                  data: `${EXAMPLE_SETTER_CONTRACT.selectors.setValue}0000000000000000000000000000000000000000000000000000000000000001`,
+                },
+              ]);
+
+              // trace the transaction
+              const trace = await this.provider.send("debug_traceTransaction", [
+                txHash,
+                {
+                  tracer: fixture.tracerCode,
+                },
+              ]);
+
+              // check that the result matches the value returned by the tracer
+              assert.deepEqual(trace, fixture.expected);
+            });
+          }
         });
       });
     });

@@ -9,6 +9,7 @@ import {
   setLengthLeft,
   toBuffer,
 } from "@nomicfoundation/ethereumjs-util";
+import * as QuickJS from "quickjs-emscripten";
 
 import { assertHardhatInvariant } from "../../core/errors";
 import { RpcDebugTracingConfig } from "../../core/jsonrpc/types/input/debugTraceTransaction";
@@ -57,6 +58,7 @@ export class VMDebugTracer {
   private _addressToStorage: Record<string, Storage> = {};
 
   private _error: any;
+  private _quickJSVM: QuickJS.QuickJSAsyncContext | undefined;
 
   constructor(private readonly _vm: VM) {
     this._beforeMessageHandler = this._beforeMessageHandler.bind(this);
@@ -64,6 +66,8 @@ export class VMDebugTracer {
     this._beforeTxHandler = this._beforeTxHandler.bind(this);
     this._stepHandler = this._stepHandler.bind(this);
     this._afterTxHandler = this._afterTxHandler.bind(this);
+    this._afterTxHandler2 = this._afterTxHandler2.bind(this);
+    this._stepHandler2 = this._stepHandler2.bind(this);
   }
 
   /**
@@ -74,7 +78,7 @@ export class VMDebugTracer {
     config: RpcDebugTracingConfig
   ): Promise<RpcDebugTraceOutput> {
     try {
-      this._enableTracing(config);
+      await this._enableTracing(config);
       this._config = config;
 
       await action();
@@ -89,19 +93,55 @@ export class VMDebugTracer {
     }
   }
 
-  private _enableTracing(config: RpcDebugTracingConfig) {
+  private async _enableTracing(config: RpcDebugTracingConfig) {
     assertHardhatInvariant(
       this._vm.evm.events !== undefined,
       "EVM should have an 'events' property"
     );
 
-    this._vm.events.on("beforeTx", this._beforeTxHandler);
+    if (config?.tracer === undefined) {
+      this._vm.events.on("beforeTx", this._beforeTxHandler);
 
-    this._vm.evm.events.on("beforeMessage", this._beforeMessageHandler);
-    this._vm.evm.events.on("step", this._stepHandler);
-    this._vm.evm.events.on("afterMessage", this._afterMessageHandler);
+      this._vm.evm.events.on("beforeMessage", this._beforeMessageHandler);
+      this._vm.evm.events.on("step", this._stepHandler);
+      this._vm.evm.events.on("afterMessage", this._afterMessageHandler);
 
-    this._vm.events.on("afterTx", this._afterTxHandler);
+      this._vm.events.on("afterTx", this._afterTxHandler);
+    } else if (typeof config.tracer === "string") {
+      const tracerDefinition = config.tracer;
+      if (this._quickJSVM === undefined) {
+        this._quickJSVM = await QuickJS.newAsyncContext();
+      }
+
+      const vm = this._quickJSVM;
+
+      vm.runtime.setInterruptHandler(() => false);
+
+      const tracerHandle = vm.unwrapResult(
+        await vm.evalCodeAsync(`(${tracerDefinition})`, "[tracer]", {
+          strict: false,
+        })
+      );
+
+      // validate the tracer
+      // if (vm.typeof(tracerHandle) !== "object") {
+      //   throw new Error("The tracer is not an object");
+      // }
+
+      const dbHandle = vm.newObject();
+      const ctxHandle = vm.newObject();
+      vm.setProp(vm.global, "__tracer", tracerHandle);
+      vm.setProp(vm.global, "__db", dbHandle);
+      vm.setProp(vm.global, "__ctx", ctxHandle);
+
+      this._vm.events.on("beforeTx", this._beforeTxHandler);
+      this._vm.events.on("afterTx", (afterTxEvent, next) =>
+        this._afterTxHandler2(vm, afterTxEvent, next)
+      );
+      this._vm.evm.events.on("step", (step, next) =>
+        this._stepHandler2(vm, step, next)
+      );
+    }
 
     this._config = config;
   }
@@ -235,6 +275,87 @@ export class VMDebugTracer {
       returnValue: result.execResult.returnValue.toString("hex"),
       structLogs: rpcStructLogs,
     };
+
+    next();
+  }
+
+  private async _afterTxHandler2(
+    vm: QuickJS.QuickJSAsyncContext,
+    afterTxEvent: AfterTxEvent,
+    next: any
+  ) {
+    const vmResult = await vm.evalCodeAsync(
+      `__tracer.result(__ctx, __db)`,
+      "[main]"
+    );
+
+    if (QuickJS.isSuccess(vmResult)) {
+      const result = vm.dump(vmResult.value);
+      vmResult.value.dispose();
+      this._lastTrace = result;
+    } else {
+      this._error = vm.dump(vmResult.error);
+      vmResult.error.dispose();
+    }
+
+    next();
+  }
+
+  private async _stepHandler2(
+    vm: QuickJS.QuickJSAsyncContext,
+    step: InterpreterStep,
+    next: any
+  ) {
+    vm.newObject().consume((logHandle) => {
+      // log.op
+      vm.newObject().consume((opHandle) => {
+        // log.op.isPush
+        vm.newFunction("isPush", function () {
+          // geth doesn't return true for PUSH0, so we don't either
+          const isPush =
+            step.opcode.name.startsWith("PUSH") && step.opcode.name !== "PUSH0";
+
+          return isPush ? vm.true : vm.false;
+        }).consume((isPushFunctionHandle) => {
+          vm.setProp(opHandle, "isPush", isPushFunctionHandle);
+        });
+
+        // log.op.toString
+        vm.newFunction("opToString", function () {
+          return vm.newString(step.opcode.name);
+        }).consume((opToStringFunctionHandle) => {
+          vm.setProp(opHandle, "toString", opToStringFunctionHandle);
+        });
+
+        vm.setProp(logHandle, "op", opHandle);
+      });
+
+      // log.stack
+      vm.newObject().consume((stackHandle) => {
+        // log.stack.length
+        vm.newFunction("stackLength", function () {
+          return vm.newNumber(step.stack.length);
+        }).consume((stackLengthFunctionHandle) => {
+          vm.setProp(stackHandle, "length", stackLengthFunctionHandle);
+        });
+
+        vm.setProp(logHandle, "stack", stackHandle);
+      });
+
+      vm.setProp(vm.global, "__log", logHandle);
+    });
+
+    const vmResult = await vm.evalCodeAsync(
+      `__tracer.step && __tracer.step(__log, __db)`,
+      "[main]"
+    );
+
+    if (QuickJS.isSuccess(vmResult)) {
+      vmResult.value.dispose();
+    } else {
+      this._error = vm.dump(vmResult.error);
+      vmResult.error.dispose();
+    }
 
     next();
   }

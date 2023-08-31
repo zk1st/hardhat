@@ -47,11 +47,11 @@ export class DebugModule {
   }
 
   private _validateTracerParam(config: RpcDebugTracingConfig) {
-    if (config?.tracer !== undefined) {
-      throw new InvalidArgumentsError(
-        "Hardhat currently only supports the default tracer, so no tracer parameter should be passed."
-      );
-    }
+    // if (config?.tracer !== undefined) {
+    //   throw new InvalidArgumentsError(
+    //     "Hardhat currently only supports the default tracer, so no tracer parameter should be passed."
+    //   );
+    // }
   }
 
   private async _traceTransactionAction(

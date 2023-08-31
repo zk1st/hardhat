@@ -142,12 +142,7 @@ export interface RpcStructLog {
   error?: object;
 }
 
-export interface RpcDebugTraceOutput {
-  failed: boolean;
-  gas: number;
-  returnValue: string;
-  structLogs: RpcStructLog[];
-}
+export type RpcDebugTraceOutput = any;
 
 export interface RpcWithdrawalItem {
   index: string;

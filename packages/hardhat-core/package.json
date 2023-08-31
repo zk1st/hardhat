@@ -134,6 +134,7 @@
     "mnemonist": "^0.38.0",
     "mocha": "^10.0.0",
     "p-map": "^4.0.0",
+    "quickjs-emscripten": "0.23.0",
     "raw-body": "^2.4.1",
     "resolve": "1.17.0",
     "semver": "^6.3.0",
