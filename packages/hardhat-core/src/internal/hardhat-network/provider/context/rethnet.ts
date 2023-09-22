@@ -17,6 +17,7 @@ import {
   HardforkName,
   getHardforkName,
   hardforkGte,
+  selectHardfork,
 } from "../../../util/hardforks";
 import { RethnetStateManager } from "../RethnetState";
 import { RethnetMemPool } from "../mem-pool/rethnet";
@@ -24,6 +25,7 @@ import { makeCommon } from "../utils/makeCommon";
 import { HARDHAT_NETWORK_DEFAULT_INITIAL_BASE_FEE_PER_GAS } from "../../../core/config/default-config";
 import { makeGenesisBlock } from "../utils/putGenesisBlock";
 import { RandomBufferGenerator } from "../utils/random";
+import { HardforkHistoryConfig } from "../../../../types";
 
 // Only one is allowed to exist
 export const globalRethnetContext = new RethnetContext();
@@ -46,6 +48,9 @@ export class RethnetEthContext implements EthContextAdapter {
     let blockchain: RethnetBlockchain;
     let state: RethnetStateManager;
 
+    let selectHardforkCallback = (blockNumber: bigint) =>
+      selectHardfork(undefined, common.hardfork(), undefined, blockNumber);
+
     if (isForkedNodeConfig(config)) {
       const chainIdToHardforkActivations: Array<
         [bigint, Array<[bigint, SpecId]>]
@@ -61,6 +66,26 @@ export class RethnetEthContext implements EthContextAdapter {
 
         return [BigInt(chainId), hardforkActivations];
       });
+
+      let hardforkActivations: HardforkHistoryConfig = new Map();
+
+      if (config.chains.has(config.chainId)) {
+        hardforkActivations = config.chains.get(
+          config.chainId
+        )!.hardforkHistory;
+      }
+
+      selectHardforkCallback = (blockNumber: bigint) => {
+        let forkBlockNumber = config.forkConfig.blockNumber
+          ? BigInt(config.forkConfig.blockNumber)
+          : undefined;
+        return selectHardfork(
+          forkBlockNumber,
+          common.hardfork(),
+          hardforkActivations,
+          blockNumber
+        );
+      };
 
       blockchain = new RethnetBlockchain(
         await Blockchain.fork(
@@ -137,7 +162,8 @@ export class RethnetEthContext implements EthContextAdapter {
       blockchain.asInner(),
       state,
       common,
-      limitContractCodeSize
+      limitContractCodeSize,
+      selectHardforkCallback
     );
 
     const memPool = new RethnetMemPool(

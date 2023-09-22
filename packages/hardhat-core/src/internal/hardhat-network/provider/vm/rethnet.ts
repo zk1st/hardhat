@@ -41,6 +41,7 @@ import { globalRethnetContext } from "../context/rethnet";
 import { RunTxResult, Trace, VMAdapter } from "./vm-adapter";
 import { BlockBuilderAdapter, BuildBlockOpts } from "./block-builder";
 import { RethnetBlockBuilder } from "./block-builder/rethnet";
+import { InternalError } from "../../../core/providers/errors";
 
 /* eslint-disable @nomiclabs/hardhat-internal-rules/only-hardhat-error */
 /* eslint-disable @typescript-eslint/no-unused-vars */
@@ -53,7 +54,8 @@ export class RethnetAdapter implements VMAdapter {
     private _blockchain: Blockchain,
     private _state: RethnetStateManager,
     private readonly _common: Common,
-    private readonly _limitContractCodeSize: bigint | null
+    private readonly _limitContractCodeSize: bigint | null,
+    private readonly _selectHardfork: (blockNumber: bigint) => string
   ) {
     this._vmTracer = new VMTracer(_common, false);
   }
@@ -61,7 +63,8 @@ export class RethnetAdapter implements VMAdapter {
   public static async create(
     config: NodeConfig,
     blockchain: Blockchain,
-    common: Common
+    common: Common,
+    selectHardfork: (blockNumber: bigint) => string
   ): Promise<RethnetAdapter> {
     let state: RethnetStateManager;
     if (isForkedNodeConfig(config)) {
@@ -80,7 +83,13 @@ export class RethnetAdapter implements VMAdapter {
     const limitContractCodeSize =
       config.allowUnlimitedContractSize === true ? 2n ** 64n - 1n : null;
 
-    return new RethnetAdapter(blockchain, state, common, limitContractCodeSize);
+    return new RethnetAdapter(
+      blockchain,
+      state,
+      common,
+      limitContractCodeSize,
+      selectHardfork
+    );
   }
 
   /**
@@ -380,8 +389,9 @@ export class RethnetAdapter implements VMAdapter {
       block.header.mixHash
     );
 
+    const common = this._getCommonForTracing(this._forkNetworkId, blockNumber);
     const evmConfig = makeConfigOptions(
-      this._common,
+      common,
       false,
       true,
       this._limitContractCodeSize
@@ -494,6 +504,26 @@ export class RethnetAdapter implements VMAdapter {
     }
 
     return undefined;
+  }
+
+  private _getCommonForTracing(networkId: number, blockNumber: bigint): Common {
+    try {
+      const common = Common.custom(
+        {
+          chainId: networkId,
+          networkId,
+        },
+        {
+          hardfork: this._selectHardfork(BigInt(blockNumber)),
+        }
+      );
+
+      return common;
+    } catch {
+      throw new InternalError(
+        `Network id ${networkId} does not correspond to a network that Hardhat can trace`
+      );
+    }
   }
 }
 
