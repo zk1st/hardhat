@@ -86,13 +86,13 @@ impl ForkState {
 }
 
 impl Clone for ForkState {
+    #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
     fn clone(&self) -> Self {
         Self {
             local_state: self.local_state.clone(),
             remote_state: self.remote_state.clone(),
             removed_storage_slots: self.removed_storage_slots.clone(),
             fork_block_number: self.fork_block_number,
-            state_root_to_state: RwLock::new(self.state_root_to_state.read().clone()),
             current_state: RwLock::new(*self.current_state.read()),
             initial_state_root: self.initial_state_root,
             hash_generator: self.hash_generator.clone(),
