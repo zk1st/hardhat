@@ -50,13 +50,13 @@ impl Node {
 
         let mut contextual_state = if let Some(irregular_state) = data
             .irregular_state
-            .state_by_block_number(&block_header.number)
+            .state_by_block_number(block_header.number)
             .cloned()
         {
             irregular_state
         } else {
             data.blockchain
-                .state_at_block_number(&block_header.number)
+                .state_at_block_number(block_header.number)
                 .await?
         };
 
@@ -188,10 +188,10 @@ pub(super) struct NodeData {
     pub beneficiary: Address,
     pub min_gas_price: U256,
     pub prevrandao_generator: RandomHashGenerator,
-    pub block_time_offset_seconds: U256,
-    pub next_block_timestamp: Option<U256>,
+    pub block_time_offset_seconds: u64,
+    pub next_block_timestamp: Option<u64>,
     pub allow_blocks_with_same_timestamp: bool,
-    pub fork_block_number: Option<U256>,
+    pub fork_block_number: Option<u64>,
 }
 
 impl NodeData {
@@ -201,7 +201,7 @@ impl NodeData {
     ) -> Result<Arc<dyn SyncBlock<Error = BlockchainError>>, NodeError> {
         match block_spec {
             BlockSpec::Number(block_number) => {
-                self.blockchain.block_by_number(block_number).await?.ok_or(
+                self.blockchain.block_by_number(*block_number).await?.ok_or(
                     NodeError::UnknownBlockNumber {
                         block_number: *block_number,
                     },
@@ -209,7 +209,7 @@ impl NodeData {
             }
             BlockSpec::Tag(BlockTag::Earliest) => Ok(self
                 .blockchain
-                .block_by_number(&U256::ZERO)
+                .block_by_number(0)
                 .await?
                 .expect("genesis block should always exist")),
             // Matching Hardhat behaviour by returning the last block for finalized and safe.
@@ -227,7 +227,7 @@ impl NodeData {
                 },
             ),
             BlockSpec::Eip1898(Eip1898BlockSpec::Number { block_number }) => {
-                self.blockchain.block_by_number(block_number).await?.ok_or(
+                self.blockchain.block_by_number(*block_number).await?.ok_or(
                     NodeError::UnknownBlockNumber {
                         block_number: *block_number,
                     },
@@ -240,12 +240,12 @@ impl NodeData {
     /// Ported from <https://github.com/NomicFoundation/hardhat/blob/b84baf2d9f5d3ea897c06e0ecd5e7084780d8b6c/packages/hardhat-core/src/internal/hardhat-network/provider/node.ts#L1942>
     async fn next_block_timestamp(
         &self,
-        timestamp: Option<U256>,
-    ) -> Result<(U256, Option<U256>), NodeError> {
+        timestamp: Option<u64>,
+    ) -> Result<(u64, Option<u64>), NodeError> {
         let latest_block = self.blockchain.last_block().await?;
         let latest_block_header = latest_block.header();
 
-        let current_timestamp = U256::from(SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs());
+        let current_timestamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
         let (mut block_timestamp, new_offset) = if let Some(timestamp) = timestamp {
             timestamp.checked_sub(latest_block_header.timestamp).ok_or(
                 NodeError::TimestampLowerThanPrevious {
@@ -266,7 +266,7 @@ impl NodeData {
         let timestamp_needs_increase = block_timestamp == latest_block_header.timestamp
             && !self.allow_blocks_with_same_timestamp;
         if timestamp_needs_increase {
-            block_timestamp += U256::from(1u64);
+            block_timestamp += 1;
         }
 
         Ok((block_timestamp, new_offset))
@@ -275,7 +275,7 @@ impl NodeData {
     /// Mine a block at a specific timestamp
     pub async fn mine_block(
         &mut self,
-        timestamp: Option<U256>,
+        timestamp: Option<u64>,
     ) -> Result<MineBlockResult<BlockchainError, StateError>, NodeError> {
         let (block_timestamp, new_offset) = self.next_block_timestamp(timestamp).await?;
 
@@ -329,7 +329,7 @@ pub enum NodeError {
     #[error(
         "The given timestamp {proposed} is lower than the previous block's timestamp {previous}"
     )]
-    TimestampLowerThanPrevious { proposed: U256, previous: U256 },
+    TimestampLowerThanPrevious { proposed: u64, previous: u64 },
     /// Block hash doesn't exist in blockchain
     /// Returned if the block spec is an EIP-1898 block spec for a hash and it's not found
     /// <https://eips.ethereum.org/EIPS/eip-1898>
@@ -339,7 +339,7 @@ pub enum NodeError {
     /// Returned if the block spec is an EIP-1898 block spec for a block number and it's not found
     /// <https://eips.ethereum.org/EIPS/eip-1898>
     #[error("Unknown block number: {block_number}")]
-    UnknownBlockNumber { block_number: U256 },
+    UnknownBlockNumber { block_number: u64 },
 
     #[error(transparent)]
     Blockchain(#[from] BlockchainError),

@@ -2463,7 +2463,6 @@ version = "0.1.0-dev"
 name = "rethnet_eth"
 version = "0.1.0-dev"
 dependencies = [
- "bytes",
  "ethbloom",
  "futures",
  "hash-db",

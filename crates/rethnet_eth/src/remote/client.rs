@@ -6,14 +6,14 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 
-use bytes::Bytes;
 use itertools::{izip, Itertools};
 use reqwest::Client as HttpClient;
 use reqwest_middleware::{ClientBuilder as HttpClientBuilder, ClientWithMiddleware};
 use reqwest_retry::{
     policies::ExponentialBackoff, RetryTransientMiddleware, Retryable, RetryableStrategy,
 };
-use revm_primitives::{AccountInfo, Address, Bytecode, B256, KECCAK_EMPTY, U256};
+use revm_primitives::ruint::aliases::U64;
+use revm_primitives::{AccountInfo, Address, Bytecode, Bytes, B256, KECCAK_EMPTY, U256};
 use tempfile::NamedTempFile;
 
 use serde::de::DeserializeOwned;
@@ -147,7 +147,7 @@ pub struct Request<MethodInvocation> {
 #[derive(Debug)]
 pub struct RpcClient {
     url: String,
-    chain_id: OnceCell<U256>,
+    chain_id: OnceCell<u64>,
     cached_block_number: RwLock<Option<CachedBlockNumber>>,
     client: ClientWithMiddleware,
     next_id: AtomicU64,
@@ -224,7 +224,7 @@ impl RpcClient {
         // Tracking issue: <https://github.com/NomicFoundation/rethnet/issues/172>
         let directory = self
             .rpc_cache_dir
-            .join(Self::hash_bytes(chain_id.as_le_bytes().as_ref()));
+            .join(Self::hash_bytes(&chain_id.to_le_bytes()));
 
         // ensure directory exists
         tokio::fs::DirBuilder::new()
@@ -300,11 +300,11 @@ impl RpcClient {
     }
 
     /// Caches a block number for the duration of the block time of the chain.
-    async fn cached_block_number(&self) -> Result<U256, RpcClientError> {
+    async fn cached_block_number(&self) -> Result<u64, RpcClientError> {
         let cached_block_number = { self.cached_block_number.read().await.clone() };
 
         if let Some(cached_block_number) = cached_block_number {
-            let delta = block_time(&self.chain_id().await?);
+            let delta = block_time(self.chain_id().await?);
             if cached_block_number.timestamp.elapsed() < delta {
                 return Ok(cached_block_number.block_number);
             }
@@ -316,21 +316,21 @@ impl RpcClient {
 
     async fn validate_block_number(
         &self,
-        safety_checker: CacheKeyForUncheckedBlockNumber<'_>,
+        safety_checker: CacheKeyForUncheckedBlockNumber,
     ) -> Result<Option<String>, RpcClientError> {
         let chain_id = self.chain_id().await?;
         let latest_block_number = self.cached_block_number().await?;
-        Ok(safety_checker.validate_block_number(&chain_id, &latest_block_number))
+        Ok(safety_checker.validate_block_number(chain_id, latest_block_number))
     }
 
     async fn resolve_block_tag<T>(
         &self,
         block_tag_resolver: CacheKeyForSymbolicBlockTag,
         result: T,
-        resolve_block_number: impl Fn(T) -> Option<U256>,
+        resolve_block_number: impl Fn(T) -> Option<u64>,
     ) -> Result<Option<String>, RpcClientError> {
         if let Some(block_number) = resolve_block_number(result) {
-            if let Some(resolved_cache_key) = block_tag_resolver.resolve_symbolic_tag(&block_number)
+            if let Some(resolved_cache_key) = block_tag_resolver.resolve_symbolic_tag(block_number)
             {
                 return match resolved_cache_key {
                     ResolvedSymbolicTag::NeedsSafetyCheck(safety_checker) => {
@@ -347,7 +347,7 @@ impl RpcClient {
         &self,
         method_invocation: &MethodInvocation,
         result: T,
-        resolve_block_number: impl Fn(T) -> Option<U256>,
+        resolve_block_number: impl Fn(T) -> Option<u64>,
     ) -> Result<Option<String>, RpcClientError> {
         let write_cache_key = try_write_cache_key(method_invocation);
 
@@ -371,7 +371,7 @@ impl RpcClient {
         &self,
         method_invocation: &MethodInvocation,
         result: &T,
-        resolve_block_number: impl Fn(&T) -> Option<U256>,
+        resolve_block_number: impl Fn(&T) -> Option<u64>,
     ) -> Result<(), RpcClientError> {
         if let Some(cache_key) = self
             .resolve_write_key(method_invocation, result, resolve_block_number)
@@ -493,7 +493,7 @@ impl RpcClient {
     async fn call_with_resolver<T: DeserializeOwned + Serialize>(
         &self,
         method_invocation: MethodInvocation,
-        resolve_block_number: impl Fn(&T) -> Option<U256>,
+        resolve_block_number: impl Fn(&T) -> Option<u64>,
     ) -> Result<T, RpcClientError> {
         let read_cache_key = try_read_cache_key(&method_invocation);
 
@@ -542,7 +542,7 @@ impl RpcClient {
     async fn batch_call_with_resolver(
         &self,
         method_invocations: &[MethodInvocation],
-        resolve_block_number: impl Fn(&serde_json::Value) -> Option<U256>,
+        resolve_block_number: impl Fn(&serde_json::Value) -> Option<u64>,
     ) -> Result<VecDeque<serde_json::Value>, RpcClientError> {
         let ids = self.get_ids(method_invocations.len() as u64);
 
@@ -618,10 +618,12 @@ impl RpcClient {
     }
 
     /// Calls `eth_blockNumber` and returns the block number.
-    pub async fn block_number(&self) -> Result<U256, RpcClientError> {
-        let block_number: U256 = self
-            .call_without_cache(MethodInvocation::BlockNumber())
-            .await?;
+    pub async fn block_number(&self) -> Result<u64, RpcClientError> {
+        let block_number = self
+            .call_without_cache::<U64>(MethodInvocation::BlockNumber())
+            .await?
+            .as_limbs()[0];
+
         {
             let mut write_guard = self.cached_block_number.write().await;
             *write_guard = Some(CachedBlockNumber::new(block_number));
@@ -632,24 +634,26 @@ impl RpcClient {
     /// Whether the block number should be cached based on its depth.
     pub async fn is_cacheable_block_number(
         &self,
-        block_number: &U256,
+        block_number: u64,
     ) -> Result<bool, RpcClientError> {
         let chain_id = self.chain_id().await?;
         let latest_block_number = self.cached_block_number().await?;
 
         Ok(is_safe_block_number(IsSafeBlockNumberArgs {
-            chain_id: &chain_id,
-            latest_block_number: &latest_block_number,
+            chain_id,
+            latest_block_number,
             block_number,
         }))
     }
 
     /// Calls `eth_chainId` and returns the chain ID.
-    pub async fn chain_id(&self) -> Result<U256, RpcClientError> {
+    pub async fn chain_id(&self) -> Result<u64, RpcClientError> {
         let chain_id = *self
             .chain_id
             .get_or_try_init(|| async {
-                self.call_without_cache(MethodInvocation::ChainId()).await
+                self.call_without_cache::<U64>(MethodInvocation::ChainId())
+                    .await
+                    .map(|chain_id| chain_id.as_limbs()[0])
             })
             .await?;
         Ok(chain_id)
@@ -713,10 +717,10 @@ impl RpcClient {
     pub async fn get_block_by_number(
         &self,
         spec: BlockSpec,
-    ) -> Result<eth::Block<B256>, RpcClientError> {
+    ) -> Result<Option<eth::Block<B256>>, RpcClientError> {
         self.call_with_resolver(
             MethodInvocation::GetBlockByNumber(spec, false),
-            |block: &eth::Block<B256>| block.number,
+            |block: &Option<eth::Block<B256>>| block.as_ref().and_then(|block| block.number),
         )
         .await
     }
@@ -800,7 +804,7 @@ impl RpcClient {
         address: &Address,
         position: U256,
         block: Option<BlockSpec>,
-    ) -> Result<U256, RpcClientError> {
+    ) -> Result<Option<U256>, RpcClientError> {
         self.call(MethodInvocation::GetStorageAt(*address, position, block))
             .await
     }
@@ -813,12 +817,12 @@ impl RpcClient {
 
 #[derive(Debug, Clone)]
 struct CachedBlockNumber {
-    block_number: U256,
+    block_number: u64,
     timestamp: Instant,
 }
 
 impl CachedBlockNumber {
-    fn new(block_number: U256) -> Self {
+    fn new(block_number: u64) -> Self {
         Self {
             block_number,
             timestamp: Instant::now(),
@@ -1037,6 +1041,9 @@ mod tests {
 
         use walkdir::WalkDir;
 
+        // The maximum block number that Alchemy allows
+        const MAX_BLOCK_NUMBER: u64 = u64::MAX >> 1;
+
         impl TestRpcClient {
             fn new_with_dir(url: &str, cache_dir: TempDir) -> Self {
                 Self {
@@ -1114,14 +1121,11 @@ mod tests {
 
             // Latest block number is never cacheable
             assert!(!client
-                .is_cacheable_block_number(&latest_block_number)
+                .is_cacheable_block_number(latest_block_number)
                 .await
                 .unwrap());
 
-            assert!(client
-                .is_cacheable_block_number(&U256::from(16220843))
-                .await
-                .unwrap());
+            assert!(client.is_cacheable_block_number(16220843).await.unwrap());
         }
 
         #[tokio::test]
@@ -1132,7 +1136,7 @@ mod tests {
                 .expect("failed to parse address");
 
             let account_info = TestRpcClient::new(&alchemy_url)
-                .get_account_info(&dai_address, Some(BlockSpec::Number(U256::from(16220843))))
+                .get_account_info(&dai_address, Some(BlockSpec::Number(16220843)))
                 .await
                 .expect("should have succeeded");
 
@@ -1149,7 +1153,7 @@ mod tests {
 
             let dai_address = Address::from_str("0x6b175474e89094c44da98b954eedeac495271d0f")
                 .expect("failed to parse address");
-            let block_spec = BlockSpec::Number(U256::from(16220843));
+            let block_spec = BlockSpec::Number(16220843);
 
             assert_eq!(client.files_in_cache().len(), 0);
 
@@ -1182,7 +1186,7 @@ mod tests {
 
             let dai_address = Address::from_str("0x6b175474e89094c44da98b954eedeac495271d0f")
                 .expect("failed to parse address");
-            let block_spec = BlockSpec::Number(U256::from(16220843));
+            let block_spec = BlockSpec::Number(16220843);
 
             assert_eq!(client.files_in_cache().len(), 0);
 
@@ -1215,7 +1219,7 @@ mod tests {
                 .expect("failed to parse address");
 
             let account_info = TestRpcClient::new(&alchemy_url)
-                .get_account_info(&empty_address, Some(BlockSpec::Number(U256::from(1))))
+                .get_account_info(&empty_address, Some(BlockSpec::Number(1)))
                 .await
                 .expect("should have succeeded");
 
@@ -1226,20 +1230,20 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn get_account_info_future_block() {
+        async fn get_account_info_unknown_block() {
             let alchemy_url = get_alchemy_url();
 
             let dai_address = Address::from_str("0x6b175474e89094c44da98b954eedeac495271d0f")
                 .expect("failed to parse address");
 
             let error = TestRpcClient::new(&alchemy_url)
-                .get_account_info(&dai_address, Some(BlockSpec::Number(U256::MAX)))
+                .get_account_info(&dai_address, Some(BlockSpec::Number(MAX_BLOCK_NUMBER)))
                 .await
                 .expect_err("should have failed");
 
             if let RpcClientError::JsonRpcError { error, .. } = error {
-                assert_eq!(error.code, -32000);
-                assert_eq!(error.message, "header for hash not found");
+                assert_eq!(error.code, -32602);
+                assert_eq!(error.message, "Unknown block number");
                 assert!(error.data.is_none());
             } else {
                 unreachable!("Invalid error: {error}");
@@ -1358,12 +1362,13 @@ mod tests {
         async fn get_block_by_number_some() {
             let alchemy_url = get_alchemy_url();
 
-            let block_number = U256::from(16222385);
+            let block_number = 16222385;
 
             let block = TestRpcClient::new(&alchemy_url)
                 .get_block_by_number(BlockSpec::Number(block_number))
                 .await
-                .expect("should have succeeded");
+                .expect("should have succeeded")
+                .expect("Block must exist");
 
             assert_eq!(block.number, Some(block_number));
             assert_eq!(block.transactions.len(), 102);
@@ -1373,18 +1378,14 @@ mod tests {
         async fn get_block_by_number_none() {
             let alchemy_url = get_alchemy_url();
 
-            let block_number = U256::MAX;
+            let block_number = MAX_BLOCK_NUMBER;
 
-            let error = TestRpcClient::new(&alchemy_url)
+            let block = TestRpcClient::new(&alchemy_url)
                 .get_block_by_number(BlockSpec::Number(block_number))
                 .await
-                .expect_err("should have failed to retrieve non-existent block number");
+                .expect("should have succeeded");
 
-            if let RpcClientError::HttpStatus(error) = error {
-                assert_eq!(error.status(), Some(StatusCode::from_u16(400).unwrap()));
-            } else {
-                unreachable!("Invalid error: {error}");
-            }
+            assert!(block.is_none());
         }
 
         #[tokio::test]
@@ -1406,7 +1407,8 @@ mod tests {
             let block = client
                 .get_block_by_number(BlockSpec::Number(block_number))
                 .await
-                .expect("should have succeeded");
+                .expect("should have succeeded")
+                .expect("Block must exist");
 
             // Unsafe block number shouldn't be cached
             assert_eq!(client.files_in_cache().len(), 0);
@@ -1418,18 +1420,14 @@ mod tests {
         async fn get_block_by_number_with_transaction_data_none() {
             let alchemy_url = get_alchemy_url();
 
-            let block_number = U256::MAX;
+            let block_number = MAX_BLOCK_NUMBER;
 
-            let error = TestRpcClient::new(&alchemy_url)
+            let block = TestRpcClient::new(&alchemy_url)
                 .get_block_by_number(BlockSpec::Number(block_number))
                 .await
-                .expect_err("should have failed to retrieve non-existent block number");
+                .expect("should have succeeded");
 
-            if let RpcClientError::HttpStatus(error) = error {
-                assert_eq!(error.status(), Some(StatusCode::from_u16(400).unwrap()));
-            } else {
-                unreachable!("Invalid error: {error}");
-            }
+            assert!(block.is_none());
         }
 
         #[tokio::test]
@@ -1437,7 +1435,7 @@ mod tests {
             let alchemy_url = get_alchemy_url();
             let client = TestRpcClient::new(&alchemy_url);
 
-            let block_spec = BlockSpec::Number(U256::from(16220843));
+            let block_spec = BlockSpec::Number(16220843);
 
             assert_eq!(client.files_in_cache().len(), 0);
 
@@ -1517,8 +1515,8 @@ mod tests {
             let alchemy_url = get_alchemy_url();
             let logs = TestRpcClient::new(&alchemy_url)
                 .get_logs(
-                    BlockSpec::Number(U256::from(10496585)),
-                    BlockSpec::Number(U256::from(10496585)),
+                    BlockSpec::Number(10496585),
+                    BlockSpec::Number(10496585),
                     &Address::from_str("0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2")
                         .expect("failed to parse data"),
                 )
@@ -1535,16 +1533,18 @@ mod tests {
             let alchemy_url = get_alchemy_url();
             let error = TestRpcClient::new(&alchemy_url)
                 .get_logs(
-                    BlockSpec::Number(U256::MAX),
-                    BlockSpec::Number(U256::MAX),
+                    BlockSpec::Number(MAX_BLOCK_NUMBER),
+                    BlockSpec::Number(MAX_BLOCK_NUMBER),
                     &Address::from_str("0xffffffffffffffffffffffffffffffffffffffff")
                         .expect("failed to parse data"),
                 )
                 .await
                 .expect_err("should have failed to get logs");
 
-            if let RpcClientError::HttpStatus(error) = error {
-                assert_eq!(error.status(), Some(StatusCode::from_u16(400).unwrap()));
+            if let RpcClientError::JsonRpcError { error, .. } = error {
+                assert_eq!(error.code, -32000);
+                assert_eq!(error.message, "One of the blocks specified in filter (fromBlock, toBlock or blockHash) cannot be found.");
+                assert!(error.data.is_none());
             } else {
                 unreachable!("Invalid error: {error}");
             }
@@ -1553,21 +1553,17 @@ mod tests {
         #[tokio::test]
         async fn get_logs_future_to_block() {
             let alchemy_url = get_alchemy_url();
-            let error = TestRpcClient::new(&alchemy_url)
+            let logs = TestRpcClient::new(&alchemy_url)
                 .get_logs(
-                    BlockSpec::Number(U256::from(10496585)),
-                    BlockSpec::Number(U256::MAX),
+                    BlockSpec::Number(10496585),
+                    BlockSpec::Number(MAX_BLOCK_NUMBER),
                     &Address::from_str("0xffffffffffffffffffffffffffffffffffffffff")
                         .expect("failed to parse data"),
                 )
                 .await
-                .expect_err("should have failed to get logs");
+                .expect("should have succeeded");
 
-            if let RpcClientError::HttpStatus(error) = error {
-                assert_eq!(error.status(), Some(StatusCode::from_u16(400).unwrap()));
-            } else {
-                unreachable!("Invalid error: {error}");
-            }
+            assert_eq!(logs, []);
         }
 
         #[tokio::test]
@@ -1575,15 +1571,15 @@ mod tests {
             let alchemy_url = get_alchemy_url();
             let logs = TestRpcClient::new(&alchemy_url)
                 .get_logs(
-                    BlockSpec::Number(U256::from(10496585)),
-                    BlockSpec::Number(U256::from(10496585)),
+                    BlockSpec::Number(10496585),
+                    BlockSpec::Number(10496585),
                     &Address::from_str("0xffffffffffffffffffffffffffffffffffffffff")
                         .expect("failed to parse data"),
                 )
                 .await
                 .expect("failed to get logs");
 
-            assert_eq!(logs.len(), 0);
+            assert_eq!(logs, Vec::new());
         }
 
         #[tokio::test]
@@ -1700,7 +1696,7 @@ mod tests {
                 .expect("failed to parse address");
 
             let transaction_count = TestRpcClient::new(&alchemy_url)
-                .get_transaction_count(&dai_address, Some(BlockSpec::Number(U256::from(16220843))))
+                .get_transaction_count(&dai_address, Some(BlockSpec::Number(16220843)))
                 .await
                 .expect("should have succeeded");
 
@@ -1715,10 +1711,7 @@ mod tests {
                 .expect("failed to parse address");
 
             let transaction_count = TestRpcClient::new(&alchemy_url)
-                .get_transaction_count(
-                    &missing_address,
-                    Some(BlockSpec::Number(U256::from(16220843))),
-                )
+                .get_transaction_count(&missing_address, Some(BlockSpec::Number(16220843)))
                 .await
                 .expect("should have succeeded");
 
@@ -1733,13 +1726,13 @@ mod tests {
                 .expect("failed to parse address");
 
             let error = TestRpcClient::new(&alchemy_url)
-                .get_transaction_count(&missing_address, Some(BlockSpec::Number(U256::MAX)))
+                .get_transaction_count(&missing_address, Some(BlockSpec::Number(MAX_BLOCK_NUMBER)))
                 .await
                 .expect_err("should have failed");
 
             if let RpcClientError::JsonRpcError { error, .. } = error {
-                assert_eq!(error.code, -32000);
-                assert_eq!(error.message, "header for hash not found");
+                assert_eq!(error.code, -32602);
+                assert_eq!(error.message, "Unknown block number");
                 assert!(error.data.is_none());
             } else {
                 unreachable!("Invalid error: {error}");
@@ -1770,15 +1763,9 @@ mod tests {
                 )
                 .expect("couldn't parse data")
             );
-            assert_eq!(
-                receipt.block_number,
-                U256::from_str_radix("a74fde", 16).expect("couldn't parse data")
-            );
+            assert_eq!(receipt.block_number, 0xa74fde);
             assert_eq!(receipt.contract_address, None);
-            assert_eq!(
-                receipt.cumulative_gas_used(),
-                U256::from_str_radix("56c81b", 16).expect("couldn't parse data")
-            );
+            assert_eq!(receipt.cumulative_gas_used(), 0x56c81b);
             assert_eq!(
                 receipt.effective_gas_price,
                 U256::from_str_radix("1e449a99b8", 16).expect("couldn't parse data")
@@ -1835,18 +1822,20 @@ mod tests {
                 .get_storage_at(
                     &dai_address,
                     U256::from(1),
-                    Some(BlockSpec::Number(U256::from(16220843))),
+                    Some(BlockSpec::Number(16220843)),
                 )
                 .await
                 .expect("should have succeeded");
 
             assert_eq!(
                 total_supply,
-                U256::from_str_radix(
-                    "000000000000000000000000000000000000000010a596ae049e066d4991945c",
-                    16
+                Some(
+                    U256::from_str_radix(
+                        "000000000000000000000000000000000000000010a596ae049e066d4991945c",
+                        16
+                    )
+                    .expect("failed to parse storage location")
                 )
-                .expect("failed to parse storage location")
             );
         }
 
@@ -1858,15 +1847,11 @@ mod tests {
                 .expect("failed to parse address");
 
             let value = TestRpcClient::new(&alchemy_url)
-                .get_storage_at(
-                    &missing_address,
-                    U256::from(1),
-                    Some(BlockSpec::Number(U256::from(1))),
-                )
+                .get_storage_at(&missing_address, U256::from(1), Some(BlockSpec::Number(1)))
                 .await
                 .expect("should have succeeded");
 
-            assert_eq!(value, U256::ZERO);
+            assert_eq!(value, Some(U256::ZERO));
         }
 
         #[tokio::test]
@@ -1897,22 +1882,16 @@ mod tests {
             let dai_address = Address::from_str("0x6b175474e89094c44da98b954eedeac495271d0f")
                 .expect("failed to parse address");
 
-            let error = TestRpcClient::new(&alchemy_url)
+            let storage_slot = TestRpcClient::new(&alchemy_url)
                 .get_storage_at(
                     &dai_address,
                     U256::from(1),
-                    Some(BlockSpec::Number(U256::MAX)),
+                    Some(BlockSpec::Number(MAX_BLOCK_NUMBER)),
                 )
                 .await
-                .expect_err("should have failed");
+                .expect("should have succeeded");
 
-            if let RpcClientError::JsonRpcError { error, .. } = error {
-                assert_eq!(error.code, -32000);
-                assert_eq!(error.message, "header for hash not found");
-                assert!(error.data.is_none());
-            } else {
-                unreachable!("Invalid error: {error}");
-            }
+            assert!(storage_slot.is_none());
         }
 
         #[tokio::test]
@@ -1933,7 +1912,7 @@ mod tests {
             let infura_url = get_infura_url();
             let dai_address = Address::from_str("0x6b175474e89094c44da98b954eedeac495271d0f")
                 .expect("failed to parse address");
-            let block_spec = Some(BlockSpec::Number(U256::from(16220843)));
+            let block_spec = Some(BlockSpec::Number(16220843));
 
             let alchemy_client = TestRpcClient::new(&alchemy_url);
             let total_supply = alchemy_client
@@ -1952,7 +1931,8 @@ mod tests {
             assert_eq!(alchemy_cached_files, infura_cached_files);
 
             let mut file = File::open(&infura_cached_files[0]).expect("failed to open file");
-            let cached_result: U256 = serde_json::from_reader(&mut file).expect("failed to parse");
+            let cached_result: Option<U256> =
+                serde_json::from_reader(&mut file).expect("failed to parse");
 
             assert_eq!(total_supply, cached_result);
         }
@@ -1968,7 +1948,7 @@ mod tests {
                 .get_storage_at(
                     &dai_address,
                     U256::from(1),
-                    Some(BlockSpec::Number(U256::from(16220843))),
+                    Some(BlockSpec::Number(16220843)),
                 )
                 .await
                 .expect("should have succeeded");
@@ -1977,7 +1957,8 @@ mod tests {
             assert_eq!(cached_files.len(), 1);
 
             let mut file = File::open(&cached_files[0]).expect("failed to open file");
-            let cached_result: U256 = serde_json::from_reader(&mut file).expect("failed to parse");
+            let cached_result: Option<U256> =
+                serde_json::from_reader(&mut file).expect("failed to parse");
 
             assert_eq!(total_supply, cached_result);
         }

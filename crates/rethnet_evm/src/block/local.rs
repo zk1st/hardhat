@@ -9,7 +9,7 @@ use rethnet_eth::{
     transaction::{DetailedTransaction, SignedTransaction},
     trie,
     withdrawal::Withdrawal,
-    Address, SpecId, B256, U256,
+    Address, SpecId, B256,
 };
 use revm::primitives::keccak256;
 
@@ -130,7 +130,7 @@ impl Block for LocalBlock {
 
 fn transaction_to_block_receipts(
     block_hash: &B256,
-    block_number: U256,
+    block_number: u64,
     receipts: Vec<TransactionReceipt<Log>>,
 ) -> Vec<Arc<BlockReceipt>> {
     let mut log_index = 0;

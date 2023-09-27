@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use napi::{bindgen_prelude::BigInt, tokio::sync::RwLock};
 use napi_derive::napi;
-use rethnet_eth::U256;
 use rethnet_evm::state::{StateError, SyncState};
 
 use crate::cast::TryCast;
@@ -41,11 +40,11 @@ impl IrregularState {
     #[doc = "Gets an irregular state by block number."]
     #[napi]
     pub async fn state_by_block_number(&self, block_number: BigInt) -> napi::Result<Option<State>> {
-        let block_number: U256 = BigInt::try_cast(block_number)?;
+        let block_number: u64 = BigInt::try_cast(block_number)?;
 
         let irregular_state = self.inner.read().await;
         Ok(irregular_state
-            .state_by_block_number(&block_number)
+            .state_by_block_number(block_number)
             .cloned()
             .map(State::from))
     }
@@ -53,7 +52,7 @@ impl IrregularState {
     #[doc = "Inserts the state for a block number, overwriting the previous state if it exists."]
     #[napi]
     pub async fn insert_state(&self, block_number: BigInt, state: &State) -> napi::Result<()> {
-        let block_number: U256 = BigInt::try_cast(block_number)?;
+        let block_number: u64 = BigInt::try_cast(block_number)?;
 
         let state = state.read().await.clone();
 

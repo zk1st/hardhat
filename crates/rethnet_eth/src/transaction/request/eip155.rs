@@ -1,7 +1,6 @@
 use std::sync::OnceLock;
 
-use bytes::Bytes;
-use revm_primitives::{keccak256, ruint::aliases::U64, B256, U256};
+use revm_primitives::{keccak256, ruint::aliases::U64, Bytes, B256, U256};
 use secp256k1::SecretKey;
 
 use crate::{

@@ -3,8 +3,7 @@ mod eip1559;
 mod eip2930;
 mod legacy;
 
-use bytes::Bytes;
-use revm_primitives::{Address, B256, U256};
+use revm_primitives::{Address, Bytes, B256, U256};
 
 use crate::{
     access_list::AccessList,
@@ -239,7 +238,7 @@ impl rlp::Decodable for SignedTransaction {
 mod tests {
     use std::sync::OnceLock;
 
-    use bytes::Bytes;
+    use revm_primitives::Bytes;
 
     use super::*;
 

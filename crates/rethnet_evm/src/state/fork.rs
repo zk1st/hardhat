@@ -26,7 +26,7 @@ pub struct ForkState {
     local_state: TrieState,
     remote_state: Arc<Mutex<CachedRemoteState>>,
     removed_storage_slots: HashSet<(Address, U256)>,
-    fork_block_number: U256,
+    fork_block_number: u64,
     /// A pair of the generated state root and local state root
     current_state: RwLock<(B256, B256)>,
     initial_state_root: B256,
@@ -40,7 +40,7 @@ impl ForkState {
         runtime: runtime::Handle,
         rpc_client: Arc<RpcClient>,
         hash_generator: Arc<Mutex<RandomHashGenerator>>,
-        fork_block_number: U256,
+        fork_block_number: u64,
         mut accounts: HashMap<Address, AccountInfo>,
     ) -> Result<Self, RpcClientError> {
         for (address, account_info) in &mut accounts {
@@ -72,7 +72,7 @@ impl ForkState {
     }
 
     /// Sets the block number of the remote state.
-    pub fn set_fork_block_number(&mut self, block_number: &U256) {
+    pub fn set_fork_block_number(&mut self, block_number: u64) {
         self.remote_state.lock().set_block_number(block_number);
     }
 
@@ -270,7 +270,7 @@ mod tests {
                 runtime,
                 Arc::new(rpc_client),
                 hash_generator,
-                U256::from(FORK_BLOCK),
+                FORK_BLOCK,
                 HashMap::default(),
             )
             .await

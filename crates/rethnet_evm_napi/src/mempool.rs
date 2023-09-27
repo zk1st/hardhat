@@ -6,7 +6,7 @@ use napi::{
     Status,
 };
 use napi_derive::napi;
-use rethnet_eth::{Address, B256, U256};
+use rethnet_eth::{Address, B256};
 
 use crate::{
     cast::TryCast,
@@ -33,7 +33,7 @@ impl MemPool {
     #[doc = "Constructs a new [`MemPool`]."]
     #[napi(constructor)]
     pub fn new(block_gas_limit: BigInt) -> napi::Result<Self> {
-        let block_gas_limit: U256 = block_gas_limit.try_cast()?;
+        let block_gas_limit: u64 = block_gas_limit.try_cast()?;
 
         Ok(Self {
             inner: Arc::new(RwLock::new(rethnet_evm::MemPool::new(block_gas_limit))),
@@ -56,16 +56,13 @@ impl MemPool {
     pub async fn block_gas_limit(&self) -> BigInt {
         let mem_pool = self.read().await;
 
-        BigInt {
-            sign_bit: false,
-            words: mem_pool.block_gas_limit().as_limbs().to_vec(),
-        }
+        BigInt::from(mem_pool.block_gas_limit())
     }
 
     #[doc = "Sets the instance's block gas limit."]
     #[napi]
     pub async fn set_block_gas_limit(&self, block_gas_limit: BigInt) -> napi::Result<()> {
-        let block_gas_limit: U256 = block_gas_limit.try_cast()?;
+        let block_gas_limit: u64 = block_gas_limit.try_cast()?;
 
         self.write().await.set_block_gas_limit(block_gas_limit);
 

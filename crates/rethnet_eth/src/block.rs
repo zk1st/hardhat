@@ -116,13 +116,13 @@ pub struct Header {
     /// The block's difficulty
     pub difficulty: U256,
     /// The block's number
-    pub number: U256,
+    pub number: u64,
     /// The block's gas limit
-    pub gas_limit: U256,
+    pub gas_limit: u64,
     /// The amount of gas used by the block
-    pub gas_used: U256,
+    pub gas_used: u64,
     /// The block's timestamp
-    pub timestamp: U256,
+    pub timestamp: u64,
     /// The block's extra data
     pub extra_data: Bytes,
     /// The block's mix hash
@@ -288,77 +288,6 @@ impl rlp::Decodable for Header {
     }
 }
 
-#[cfg(feature = "fastrlp")]
-impl open_fastrlp::Encodable for Header {
-    fn length(&self) -> usize {
-        // add each of the fields' rlp encoded lengths
-        let mut length = 0;
-        length += self.header_payload_length();
-        length += open_fastrlp::length_of_length(length);
-
-        length
-    }
-
-    fn encode(&self, out: &mut dyn open_fastrlp::BufMut) {
-        let list_header = open_fastrlp::Header {
-            list: true,
-            payload_length: self.header_payload_length(),
-        };
-        list_header.encode(out);
-        self.parent_hash.encode(out);
-        self.ommers_hash.encode(out);
-        self.beneficiary.encode(out);
-        self.state_root.encode(out);
-        self.transactions_root.encode(out);
-        self.receipts_root.encode(out);
-        self.logs_bloom.encode(out);
-        self.difficulty.encode(out);
-        self.number.encode(out);
-        self.gas_limit.encode(out);
-        self.gas_used.encode(out);
-        self.timestamp.encode(out);
-        self.extra_data.encode(out);
-        self.mix_hash.encode(out);
-        self.nonce.encode(out);
-        if let Some(base_fee_per_gas) = self.base_fee_per_gas {
-            base_fee_per_gas.encode(out);
-        }
-    }
-}
-
-#[cfg(feature = "fastrlp")]
-impl open_fastrlp::Decodable for Header {
-    fn decode(buf: &mut &[u8]) -> Result<Self, open_fastrlp::DecodeError> {
-        // slice out the rlp list header
-        let header = open_fastrlp::Header::decode(buf)?;
-        let start_len = buf.len();
-
-        Ok(Header {
-            parent_hash: <B256 as open_fastrlp::Decodable>::decode(buf)?,
-            ommers_hash: <B256 as open_fastrlp::Decodable>::decode(buf)?,
-            beneficiary: <Address as open_fastrlp::Decodable>::decode(buf)?,
-            state_root: <B256 as open_fastrlp::Decodable>::decode(buf)?,
-            transactions_root: <B256 as open_fastrlp::Decodable>::decode(buf)?,
-            receipts_root: <B256 as open_fastrlp::Decodable>::decode(buf)?,
-            logs_bloom: <Bloom as open_fastrlp::Decodable>::decode(buf)?,
-            difficulty: <U256 as open_fastrlp::Decodable>::decode(buf)?,
-            number: <U256 as open_fastrlp::Decodable>::decode(buf)?,
-            gas_limit: <U256 as open_fastrlp::Decodable>::decode(buf)?,
-            gas_used: <U256 as open_fastrlp::Decodable>::decode(buf)?,
-            timestamp: <u64 as open_fastrlp::Decodable>::decode(buf)?,
-            extra_data: <Bytes as open_fastrlp::Decodable>::decode(buf)?,
-            mix_hash: <B256 as open_fastrlp::Decodable>::decode(buf)?,
-            nonce: <H64 as open_fastrlp::Decodable>::decode(buf)?,
-            base_fee_per_gas: if start_len - header.payload_length < buf.len() {
-                // if there is leftover data in the payload, decode the base fee
-                Some(<U256 as open_fastrlp::Decodable>::decode(buf)?)
-            } else {
-                None
-            },
-        })
-    }
-}
-
 /// Partial header definition without ommers hash and transactions root
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PartialHeader {
@@ -375,13 +304,13 @@ pub struct PartialHeader {
     /// The block's difficulty
     pub difficulty: U256,
     /// The block's number
-    pub number: U256,
+    pub number: u64,
     /// The block's gas limit
-    pub gas_limit: U256,
+    pub gas_limit: u64,
     /// The amount of gas used by the block
-    pub gas_used: U256,
+    pub gas_used: u64,
     /// The block's timestamp
-    pub timestamp: U256,
+    pub timestamp: u64,
     /// The block's extra data
     pub extra_data: Bytes,
     /// The block's mix hash
@@ -396,11 +325,11 @@ impl PartialHeader {
     /// Constructs a new instance based on the provided [`BlockOptions`] and parent [`Header`] for the given [`SpecId`].
     pub fn new(spec_id: SpecId, options: BlockOptions, parent: Option<&Header>) -> Self {
         let timestamp = options.timestamp.unwrap_or_default();
-        let number = options.number.unwrap_or_else(|| {
+        let number = options.number.unwrap_or({
             if let Some(parent) = &parent {
-                parent.number + U256::from(1)
+                parent.number + 1
             } else {
-                U256::ZERO
+                0
             }
         });
 
@@ -422,14 +351,14 @@ impl PartialHeader {
                 if spec_id >= SpecId::MERGE {
                     U256::ZERO
                 } else if let Some(parent) = parent {
-                    calculate_ethash_canonical_difficulty(spec_id, parent, &number, &timestamp)
+                    calculate_ethash_canonical_difficulty(spec_id, parent, number, timestamp)
                 } else {
                     U256::from(1)
                 }
             }),
             number,
-            gas_limit: options.gas_limit.unwrap_or(U256::from(1_000_000)),
-            gas_used: U256::ZERO,
+            gas_limit: options.gas_limit.unwrap_or(1_000_000),
+            gas_used: 0,
             timestamp,
             extra_data: options.extra_data.unwrap_or_default(),
             mix_hash: options.mix_hash.unwrap_or_default(),
@@ -456,10 +385,10 @@ impl Default for PartialHeader {
             receipts_root: KECCAK_NULL_RLP,
             logs_bloom: Bloom::default(),
             difficulty: U256::default(),
-            number: U256::default(),
-            gas_limit: U256::from(DEFAULT_GAS),
-            gas_used: U256::default(),
-            timestamp: U256::default(),
+            number: u64::default(),
+            gas_limit: DEFAULT_GAS,
+            gas_used: u64::default(),
+            timestamp: u64::default(),
             extra_data: Bytes::default(),
             mix_hash: B256::default(),
             nonce: B64::default(),
@@ -508,10 +437,10 @@ mod tests {
             receipts_root: B256::default(),
             logs_bloom: Bloom::default(),
             difficulty: U256::default(),
-            number: U256::from(124),
-            gas_limit: U256::default(),
-            gas_used: U256::from(1337),
-            timestamp: U256::ZERO,
+            number: 124,
+            gas_limit: u64::default(),
+            gas_used: 1337,
+            timestamp: 0,
             extra_data: Bytes::default(),
             mix_hash: B256::default(),
             nonce: B64::from_limbs([99u64.to_be()]),
@@ -531,78 +460,54 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "fastrlp")]
-    fn header_fastrlp_roundtrip() {
-        let mut header = Header {
-            parent_hash: Default::default(),
-            ommers_hash: Default::default(),
-            beneficiary: Default::default(),
-            state_root: Default::default(),
-            transactions_root: Default::default(),
-            receipts_root: Default::default(),
-            logs_bloom: Default::default(),
-            difficulty: Default::default(),
-            number: 124u64.into(),
-            gas_limit: Default::default(),
-            gas_used: 1337u64.into(),
-            timestamp: 0,
-            extra_data: Default::default(),
-            mix_hash: Default::default(),
-            nonce: H64::from_low_u64_be(99u64),
-            base_fee_per_gas: None,
-        };
-
-        let mut encoded = vec![];
-        <Header as open_fastrlp::Encodable>::encode(&header, &mut encoded);
-        let decoded: Header =
-            <Header as open_fastrlp::Decodable>::decode(&mut encoded.as_slice()).unwrap();
-        assert_eq!(header, decoded);
-
-        header.base_fee_per_gas = Some(12345u64.into());
-
-        encoded.clear();
-        <Header as open_fastrlp::Encodable>::encode(&header, &mut encoded);
-        let decoded: Header =
-            <Header as open_fastrlp::Decodable>::decode(&mut encoded.as_slice()).unwrap();
-        assert_eq!(header, decoded);
-    }
-
-    #[test]
-    #[cfg(feature = "fastrlp")]
     // Test vector from: https://eips.ethereum.org/EIPS/eip-2481
     fn test_encode_block_header() {
-        use open_fastrlp::Encodable;
-
         let expected = hex::decode("f901f9a00000000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000000940000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000000b90100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008208ae820d0582115c8215b3821a0a827788a00000000000000000000000000000000000000000000000000000000000000000880000000000000000").unwrap();
-        let mut data = vec![];
         let header = Header {
-            parent_hash: B256::from_str("0000000000000000000000000000000000000000000000000000000000000000").unwrap(),
-            ommers_hash: B256::from_str("0000000000000000000000000000000000000000000000000000000000000000").unwrap(),
-            beneficiary: H160::from_str("0000000000000000000000000000000000000000").unwrap(),
-            state_root: B256::from_str("0000000000000000000000000000000000000000000000000000000000000000").unwrap(),
-            transactions_root: B256::from_str("0000000000000000000000000000000000000000000000000000000000000000").unwrap(),
-            receipts_root: B256::from_str("0000000000000000000000000000000000000000000000000000000000000000").unwrap(),
-            logs_bloom: <[u8; 256]>::from_hex("00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000").unwrap().into(),
-            difficulty: 0x8aeu64.into(),
-            number: 0xd05u64.into(),
-            gas_limit: 0x115cu64.into(),
-            gas_used: 0x15b3u64.into(),
-            timestamp: 0x1a0au64,
+            parent_hash: B256::from_str(
+                "0000000000000000000000000000000000000000000000000000000000000000",
+            )
+            .unwrap(),
+            ommers_hash: B256::from_str(
+                "0000000000000000000000000000000000000000000000000000000000000000",
+            )
+            .unwrap(),
+            beneficiary: Address::from_str("0000000000000000000000000000000000000000").unwrap(),
+            state_root: B256::from_str(
+                "0000000000000000000000000000000000000000000000000000000000000000",
+            )
+            .unwrap(),
+            transactions_root: B256::from_str(
+                "0000000000000000000000000000000000000000000000000000000000000000",
+            )
+            .unwrap(),
+            receipts_root: B256::from_str(
+                "0000000000000000000000000000000000000000000000000000000000000000",
+            )
+            .unwrap(),
+            logs_bloom: Bloom::zero(),
+            difficulty: U256::from(0x8aeu64),
+            number: 0xd05,
+            gas_limit: 0x115c,
+            gas_used: 0x15b3,
+            timestamp: 0x1a0a,
             extra_data: hex::decode("7788").unwrap().into(),
-            mix_hash: B256::from_str("0000000000000000000000000000000000000000000000000000000000000000").unwrap(),
-            nonce: U64::from(0x0),
+            mix_hash: B256::from_str(
+                "0000000000000000000000000000000000000000000000000000000000000000",
+            )
+            .unwrap(),
+            nonce: B64::from_limbs([0x0u64.to_be()]),
             base_fee_per_gas: None,
+            withdrawals_root: None,
         };
-        header.encode(&mut data);
-        assert_eq!(hex::encode(&data), hex::encode(expected));
-        assert_eq!(header.length(), data.len());
+
+        let encoded = rlp::encode(&header);
+        assert_eq!(hex::encode(&encoded), hex::encode(expected));
     }
 
     #[test]
     // Test vector from: https://github.com/ethereum/tests/blob/f47bbef4da376a49c8fc3166f09ab8a6d182f765/BlockchainTests/ValidBlocks/bcEIP1559/baseFee.json#L15-L36
     fn test_eip1559_block_header_hash() {
-        use hex::FromHex;
-
         let expected_hash =
             B256::from_str("0x6a251c7c3c5dca7b42407a3752ff48f3bbca1fab7f9868371d9918daf1988d1f")
                 .unwrap();
@@ -628,17 +533,14 @@ mod tests {
                 "0x29b0562f7140574dd0d50dee8a271b22e1a0a7b78fca58f7c60370d8317ba2a9",
             )
             .unwrap(),
-            logs_bloom: <[u8; 256]>::from_hex("00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000").unwrap().into(),
+            logs_bloom: Bloom::zero(),
             difficulty: U256::from(0x020000u64),
-            number: U256::from(0x01u64),
-            gas_limit: U256::from_str("0x016345785d8a0000").unwrap(),
-            gas_used: U256::from(0x015534u64),
-            timestamp: U256::from(0x079eu64),
+            number: 0x01,
+            gas_limit: 0x016345785d8a0000,
+            gas_used: 0x015534,
+            timestamp: 0x079e,
             extra_data: hex::decode("42").unwrap().into(),
-            mix_hash: B256::from_str(
-                "0000000000000000000000000000000000000000000000000000000000000000",
-            )
-            .unwrap(),
+            mix_hash: B256::zero(),
             nonce: B64::from(U64::ZERO),
             base_fee_per_gas: Some(U256::from(0x036bu64)),
             withdrawals_root: None,
@@ -647,48 +549,47 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "fastrlp")]
     // Test vector from: https://eips.ethereum.org/EIPS/eip-2481
     fn test_decode_block_header() {
         let data = hex::decode("f901f9a00000000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000000940000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000000b90100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008208ae820d0582115c8215b3821a0a827788a00000000000000000000000000000000000000000000000000000000000000000880000000000000000").unwrap();
         let expected = Header {
-            parent_hash: B256::from_str("0000000000000000000000000000000000000000000000000000000000000000").unwrap(),
-            ommers_hash: B256::from_str("0000000000000000000000000000000000000000000000000000000000000000").unwrap(),
-            beneficiary: H160::from_str("0000000000000000000000000000000000000000").unwrap(),
-            state_root: B256::from_str("0000000000000000000000000000000000000000000000000000000000000000").unwrap(),
-            transactions_root: B256::from_str("0000000000000000000000000000000000000000000000000000000000000000").unwrap(),
-            receipts_root: B256::from_str("0000000000000000000000000000000000000000000000000000000000000000").unwrap(),
-            logs_bloom: <[u8; 256]>::from_hex("00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000").unwrap().into(),
-            difficulty: 0x8aeu64.into(),
-            number: 0xd05u64.into(),
-            gas_limit: 0x115cu64.into(),
-            gas_used: 0x15b3u64.into(),
-            timestamp: 0x1a0au64,
+            parent_hash: B256::from_str(
+                "0000000000000000000000000000000000000000000000000000000000000000",
+            )
+            .unwrap(),
+            ommers_hash: B256::from_str(
+                "0000000000000000000000000000000000000000000000000000000000000000",
+            )
+            .unwrap(),
+            beneficiary: Address::from_str("0000000000000000000000000000000000000000").unwrap(),
+            state_root: B256::from_str(
+                "0000000000000000000000000000000000000000000000000000000000000000",
+            )
+            .unwrap(),
+            transactions_root: B256::from_str(
+                "0000000000000000000000000000000000000000000000000000000000000000",
+            )
+            .unwrap(),
+            receipts_root: B256::from_str(
+                "0000000000000000000000000000000000000000000000000000000000000000",
+            )
+            .unwrap(),
+            logs_bloom: Bloom::zero(),
+            difficulty: U256::from(0x8aeu64),
+            number: 0xd05,
+            gas_limit: 0x115c,
+            gas_used: 0x15b3,
+            timestamp: 0x1a0a,
             extra_data: hex::decode("7788").unwrap().into(),
-            mix_hash: B256::from_str("0000000000000000000000000000000000000000000000000000000000000000").unwrap(),
-            nonce: U64::from(0x0),
+            mix_hash: B256::from_str(
+                "0000000000000000000000000000000000000000000000000000000000000000",
+            )
+            .unwrap(),
+            nonce: B64::from_limbs([0x0u64.to_be()]),
             base_fee_per_gas: None,
+            withdrawals_root: None,
         };
-        let header = <Header as open_fastrlp::Decodable>::decode(&mut data.as_slice()).unwrap();
+        let header: Header = rlp::decode(&data).unwrap();
         assert_eq!(header, expected);
-    }
-
-    #[test]
-    #[cfg(feature = "fastrlp")]
-    // Test vector from network
-    fn block_network_fastrlp_roundtrip() {
-        use open_fastrlp::Encodable;
-
-        let data = hex::decode("f9034df90348a0fbdbd8d2d0ac5f14bd5fa90e547fe6f1d15019c724f8e7b60972d381cd5d9cf8a01dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d4934794c9577e7945db22e38fc060909f2278c7746b0f9ba05017cfa3b0247e35197215ae8d610265ffebc8edca8ea66d6567eb0adecda867a056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421a056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421b9010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000018355bb7b871fffffffffffff808462bd0e1ab9014bf90148a00000000000000000000000000000000000000000000000000000000000000000f85494319fa8f1bc4e53410e92d10d918659b16540e60a945a573efb304d04c1224cd012313e827eca5dce5d94a9c831c5a268031176ebf5f3de5051e8cba0dbfe94c9577e7945db22e38fc060909f2278c7746b0f9b808400000000f8c9b841a6946f2d16f68338cbcbd8b117374ab421128ce422467088456bceba9d70c34106128e6d4564659cf6776c08a4186063c0a05f7cffd695c10cf26a6f301b67f800b8412b782100c18c35102dc0a37ece1a152544f04ad7dc1868d18a9570f744ace60870f822f53d35e89a2ea9709ccbf1f4a25ee5003944faa845d02dde0a41d5704601b841d53caebd6c8a82456e85c2806a9e08381f959a31fb94a77e58f00e38ad97b2e0355b8519ab2122662cbe022f2a4ef7ff16adc0b2d5dcd123181ec79705116db300a063746963616c2062797a616e74696e65206661756c7420746f6c6572616e6365880000000000000000c0c0").unwrap();
-
-        let block = <Block as open_fastrlp::Decodable>::decode(&mut data.as_slice()).unwrap();
-
-        // encode and check that it matches the original data
-        let mut encoded = Vec::new();
-        block.encode(&mut encoded);
-        assert_eq!(data, encoded);
-
-        // check that length of encoding is the same as the output of `length`
-        assert_eq!(block.length(), encoded.len());
     }
 }
