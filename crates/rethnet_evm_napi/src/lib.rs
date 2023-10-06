@@ -2,6 +2,9 @@
 
 //! NAPI bindings for the Rethnet EVM
 
+#[global_allocator]
+static ALLOC: rpmalloc::RpMalloc = rpmalloc::RpMalloc;
+
 mod access_list;
 mod account;
 mod block;
