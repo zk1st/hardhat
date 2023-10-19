@@ -174,7 +174,8 @@ export class VMTracer {
         );
       }
 
-      trace.steps.push({ pc: Number(step.pc) });
+      // @ts-ignore
+      trace.steps.push({ pc: step.pc });
     } catch (error) {
       if (this._throwErrors) {
         throw error;

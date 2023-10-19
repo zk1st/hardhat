@@ -733,7 +733,8 @@ export class EthereumJSAdapter implements VMAdapter {
     try {
       this._vmTracer.addStep({
         depth: step.depth,
-        pc: BigInt(step.pc),
+        // @ts-ignore
+        pc: step.pc,
         opcode: step.opcode.name,
         // returnValue: 0, // Do we have error values in ethereumjs?
         // gasCost: BigInt(step.opcode.fee) + (step.opcode.dynamicFee ?? 0n),
