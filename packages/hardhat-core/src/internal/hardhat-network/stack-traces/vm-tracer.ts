@@ -158,7 +158,7 @@ export class VMTracer {
     }
   }
 
-  public async addStep(step: TracingStep) {
+  public addStep(step: TracingStep) {
     if (!this._shouldKeepTracing()) {
       return;
     }

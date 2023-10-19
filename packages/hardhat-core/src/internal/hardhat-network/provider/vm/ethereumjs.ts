@@ -731,7 +731,7 @@ export class EthereumJSAdapter implements VMAdapter {
 
   private async _stepHandler(step: InterpreterStep, next: any): Promise<void> {
     try {
-      await this._vmTracer.addStep({
+      this._vmTracer.addStep({
         depth: step.depth,
         pc: BigInt(step.pc),
         opcode: step.opcode.name,

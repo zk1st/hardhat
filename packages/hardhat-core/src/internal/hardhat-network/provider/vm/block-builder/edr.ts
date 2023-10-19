@@ -86,7 +86,7 @@ export class EdrBlockBuilder implements BlockBuilderAdapter {
     const trace = edrResult.trace!;
     for (const traceItem of trace) {
       if ("pc" in traceItem) {
-        await this._vmTracer.addStep(traceItem);
+        this._vmTracer.addStep(traceItem);
       } else if ("executionResult" in traceItem) {
         await this._vmTracer.addAfterMessage(traceItem);
       } else {

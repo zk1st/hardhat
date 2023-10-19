@@ -99,7 +99,7 @@ export class EdrMiner implements BlockMinerAdapter {
     for (const mineTrace of mineResult.traces) {
       for (const traceItem of mineTrace) {
         if ("pc" in traceItem) {
-          await vmTracer.addStep(traceItem);
+          vmTracer.addStep(traceItem);
 
           for (const listener of this._stepListeners) {
             await listener({
