@@ -8,6 +8,7 @@ use axum::{
     http::StatusCode,
     Router,
 };
+use edr_config::NodeConfig;
 use sha3::{Digest, Keccak256};
 use tracing::{event, Level};
 
@@ -28,7 +29,7 @@ use edr_evm::{blockchain::BlockchainError, state::StateError, MineBlockResult};
 
 use crate::{
     node::{Node, NodeError},
-    Config, HardhatMethodInvocation,
+    HardhatMethodInvocation,
 };
 
 /// an RPC method with its parameters
@@ -656,7 +657,7 @@ async fn router(node: Arc<Node>) -> Router {
 
 impl Server {
     /// Accepts a configuration and a set of initial accounts to initialize the state.
-    pub async fn new(config: &Config) -> Result<Self, ServerError> {
+    pub async fn new(config: &NodeConfig) -> Result<Self, ServerError> {
         let listener = TcpListener::bind(config.address).map_err(ServerError::Listen)?;
         event!(Level::INFO, "Listening on {}", config.address);
 

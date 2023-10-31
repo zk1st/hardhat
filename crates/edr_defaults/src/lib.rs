@@ -1,3 +1,12 @@
+use std::{
+    net::{IpAddr, Ipv4Addr, SocketAddr},
+    str::FromStr,
+};
+
+use edr_config::{AccountConfig, BlockchainConfig, NodeConfig};
+use edr_eth::signature::secret_key_from_str;
+use revm_primitives::{Address, SpecId, U256};
+
 /// The default secret keys from which the local accounts will be derived.
 pub const SECRET_KEYS: [&str; 20] = [
     // these were taken from the standard output of a run of `hardhat node`
@@ -27,5 +36,35 @@ pub const SECRET_KEYS: [&str; 20] = [
 /// subdirectories of this directory.
 pub const CACHE_DIR: &str = "./edr-cache";
 
+/// The default coinbase.
+pub const DEFAULT_COINBASE: &str = "0xc014ba5ec014ba5ec014ba5ec014ba5ec014ba5e";
+
 /// Maximum concurrent requests to a remote blockchain node to avoid getting rate limited.
 pub const MAX_CONCURRENT_REQUESTS: usize = 5;
+
+pub fn default_node_config() -> NodeConfig {
+    let block_gas_limit = 30_000_000;
+    NodeConfig {
+        address: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 0),
+        accounts: SECRET_KEYS
+            .iter()
+            .map(|secret_key| AccountConfig {
+                secret_key: secret_key_from_str(secret_key)
+                    .expect("should construct secret key from string"),
+                balance: U256::from(10_000),
+            })
+            .collect(),
+        allow_blocks_with_same_timestamp: false,
+        allow_unlimited_contract_size: false,
+        block_gas_limit,
+        blockchain: BlockchainConfig { forking: None },
+        cache_dir: CACHE_DIR.into(),
+        chain_id: 1,
+        coinbase: Address::from_str(DEFAULT_COINBASE).expect("should parse default coinbase"),
+        gas: block_gas_limit,
+        hardfork: SpecId::LATEST,
+        initial_base_fee_per_gas: Some(U256::from(1_000_000_000)),
+        initial_date: None,
+        network_id: 1,
+    }
+}

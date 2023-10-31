@@ -68,7 +68,7 @@ pub enum HardhatMethodInvocation {
         serialize_with = "single_to_sequence",
         deserialize_with = "sequence_to_single"
     )]
-    Reset(Option<reset::RpcHardhatNetworkConfig>),
+    Reset(Option<reset::BlockchainConfig>),
     /// hardhat_setBalance
     #[serde(rename = "hardhat_setBalance")]
     SetBalance(Address, U256),
@@ -226,7 +226,7 @@ mod tests {
     #[test]
     fn test_serde_hardhat_reset() {
         help_test_method_invocation_serde(HardhatMethodInvocation::Reset(Some(
-            reset::RpcHardhatNetworkConfig {
+            reset::BlockchainConfig {
                 forking: Some(reset::RpcForkConfig {
                     json_rpc_url: String::from("http://whatever.com/whatever"),
                     block_number: Some(123456),

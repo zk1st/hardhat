@@ -1,4 +1,5 @@
 pub mod env;
+pub mod fixture;
 
 pub fn help_test_method_invocation_serde<MethodInvocation>(call: MethodInvocation)
 where

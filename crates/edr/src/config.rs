@@ -5,8 +5,7 @@ use std::{str::FromStr, time::SystemTime};
 use anyhow::anyhow;
 use edr_eth::{serde::ZeroXPrefixedBytes, Address, Bytes, SpecId, U256};
 use edr_rpc_server::{
-    AccountConfig as ServerAccountConfig, Config as ServerConfig, RpcForkConfig,
-    RpcHardhatNetworkConfig,
+    AccountConfig as ServerAccountConfig, BlockchainConfig, Config as ServerConfig, RpcForkConfig,
 };
 use hex;
 use serde::{Deserialize, Serialize};
@@ -46,7 +45,7 @@ impl ConfigFile {
             address: SocketAddr::new(cli_args.host, cli_args.port),
             allow_blocks_with_same_timestamp: cli_args.allow_blocks_with_same_timestamp
                 || self.allow_blocks_with_same_timestamp,
-            rpc_hardhat_network_config: RpcHardhatNetworkConfig {
+            blockchain: BlockchainConfig {
                 forking: if let Some(json_rpc_url) = cli_args.fork_url {
                     Some(RpcForkConfig {
                         json_rpc_url,

@@ -1,0 +1,9 @@
+[package]
+name = "edr_config"
+version = "0.1.0-dev"
+edition = "2021"
+
+[dependencies]
+revm-primitives = { git = "https://github.com/Wodann/revm", rev = "93d8ebe", version = "1.1", default-features = false }
+k256 = { version = "0.13.1", default-features = false, features = ["arithmetic", "ecdsa", "pkcs8", "precomputed-tables", "std"] }
+serde = { version = "1.0.147", default-features = false, features = ["derive"] }

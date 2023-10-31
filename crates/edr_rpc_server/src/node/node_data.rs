@@ -3,6 +3,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+use edr_config::{AccountConfig, NodeConfig};
 use indexmap::IndexMap;
 
 use edr_eth::{
@@ -18,7 +19,7 @@ use edr_evm::{
     RandomHashGenerator, SyncBlock, KECCAK_EMPTY,
 };
 
-use crate::{filter::Filter, node::node_error::NodeError, AccountConfig, Config};
+use crate::{filter::Filter, node::node_error::NodeError};
 
 pub(super) struct NodeData {
     pub blockchain: Box<dyn SyncBlockchain<BlockchainError, StateError>>,
@@ -41,7 +42,7 @@ pub(super) struct NodeData {
 }
 
 impl NodeData {
-    pub async fn new(config: &Config) -> Result<Self, NodeError> {
+    pub async fn new(config: &NodeConfig) -> Result<Self, NodeError> {
         let InitialAccounts {
             local_accounts,
             genesis_accounts,
@@ -243,7 +244,7 @@ struct InitialAccounts {
     genesis_accounts: HashMap<Address, AccountInfo>,
 }
 
-fn create_accounts(config: &Config) -> InitialAccounts {
+fn create_accounts(config: &NodeConfig) -> InitialAccounts {
     let mut local_accounts = IndexMap::default();
     let mut genesis_accounts = HashMap::default();
 
@@ -276,10 +277,10 @@ struct BlockchainAndState {
 }
 
 async fn create_blockchain_and_state(
-    config: &Config,
+    config: &NodeConfig,
     genesis_accounts: HashMap<Address, AccountInfo>,
 ) -> Result<BlockchainAndState, NodeError> {
-    if let Some(fork_config) = &config.rpc_hardhat_network_config.forking {
+    if let Some(fork_config) = &config.blockchain.forking {
         let runtime = Arc::new(
             tokio::runtime::Builder::new_multi_thread()
                 .enable_io()
@@ -346,7 +347,7 @@ async fn create_blockchain_and_state(
     }
 }
 
-fn block_time_offset_seconds(config: &Config) -> Result<u64, NodeError> {
+fn block_time_offset_seconds(config: &NodeConfig) -> Result<u64, NodeError> {
     config.initial_date.map_or(Ok(0), |initial_date| {
         Ok(SystemTime::now()
             .duration_since(initial_date)
@@ -355,7 +356,7 @@ fn block_time_offset_seconds(config: &Config) -> Result<u64, NodeError> {
     })
 }
 
-fn create_evm_config(config: &Config) -> CfgEnv {
+fn create_evm_config(config: &NodeConfig) -> CfgEnv {
     let mut evm_config = CfgEnv::default();
     evm_config.chain_id = config.chain_id;
     evm_config.spec_id = config.hardfork;

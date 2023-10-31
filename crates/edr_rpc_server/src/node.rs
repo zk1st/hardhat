@@ -3,6 +3,7 @@ mod node_error;
 
 use std::mem;
 
+use edr_config::NodeConfig;
 use k256::SecretKey;
 use tokio::sync::Mutex;
 
@@ -21,7 +22,7 @@ use edr_evm::{
     AccountInfo, Block, Bytecode, MineBlockResult, KECCAK_EMPTY,
 };
 
-use crate::{filter::Filter, node::node_data::NodeData, Config};
+use crate::{filter::Filter, node::node_data::NodeData};
 
 pub use self::node_error::NodeError;
 
@@ -30,7 +31,7 @@ pub struct Node {
 }
 
 impl Node {
-    pub async fn new(config: &Config) -> Result<Self, NodeError> {
+    pub async fn new(config: &NodeConfig) -> Result<Self, NodeError> {
         let node_data = NodeData::new(config).await?;
         Ok(Self {
             data: Mutex::new(node_data),
@@ -401,47 +402,4 @@ impl Node {
 pub struct LocalAccountInfo {
     pub address: Address,
     pub secret_key: SecretKey,
-}
-
-#[cfg(test)]
-mod tests {
-    use anyhow::Result;
-    use tempfile::TempDir;
-
-    use edr_eth::U64;
-
-    use crate::{create_test_config, Config};
-
-    use super::*;
-
-    struct NodeTestFixture {
-        // We need to keep the tempdir alive for the duration of the test
-        _cache_dir: TempDir,
-        config: Config,
-        node: Node,
-    }
-
-    impl NodeTestFixture {
-        pub(crate) async fn new() -> Result<Self> {
-            let cache_dir = TempDir::new().expect("should create temp dir");
-            let config = create_test_config(cache_dir.path().to_path_buf());
-            let node = Node::new(&config).await?;
-
-            Ok(Self {
-                _cache_dir: cache_dir,
-                config,
-                node,
-            })
-        }
-    }
-
-    #[tokio::test]
-    async fn chain_id() -> Result<()> {
-        let fixture = NodeTestFixture::new().await?;
-
-        let chain_id = fixture.node.chain_id().await;
-        assert_eq!(chain_id, U64::from(fixture.config.chain_id));
-
-        Ok(())
-    }
 }
