@@ -1,3 +1,5 @@
+import { SourceUnit } from "../internal/hardhat-network/stack-traces/ast";
+
 export interface Artifacts {
   /**
    * Reads an artifact.
@@ -230,7 +232,7 @@ export interface CompilerOutput {
 
 export interface CompilerOutputSource {
   id: number;
-  ast: any;
+  ast: SourceUnit;
 }
 
 export interface CompilerOutputSources {

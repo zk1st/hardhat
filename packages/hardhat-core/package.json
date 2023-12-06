@@ -143,6 +143,7 @@
     "resolve": "1.17.0",
     "semver": "^6.3.0",
     "solc": "0.7.3",
+    "solidity-ast": "^0.4.55",
     "source-map-support": "^0.5.13",
     "stacktrace-parser": "^0.1.10",
     "tsort": "0.0.1",

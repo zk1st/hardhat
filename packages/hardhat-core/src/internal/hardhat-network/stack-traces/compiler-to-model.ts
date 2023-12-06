@@ -22,6 +22,12 @@ import {
   SourceLocation,
 } from "./model";
 import { decodeInstructions } from "./source-maps";
+import {
+  ContractDefinition,
+  FunctionDefinition,
+  ModifierDefinition,
+  VariableDeclaration,
+} from "./ast";
 
 const abi = require("ethereumjs-abi");
 
@@ -133,7 +139,7 @@ function createSourcesModelFromAst(
 
 function processContractAstNode(
   file: SourceFile,
-  contractNode: any,
+  contractNode: ContractDefinition,
   fileIdToSourceFile: Map<number, SourceFile>,
   contractType: ContractType,
   contractIdToContract: Map<number, Contract>,
@@ -195,7 +201,7 @@ function processContractAstNode(
 }
 
 function processFunctionDefinitionAstNode(
-  functionDefinitionNode: any,
+  functionDefinitionNode: FunctionDefinition,
   fileIdToSourceFile: Map<number, SourceFile>,
   contract: Contract | undefined,
   file: SourceFile,
@@ -264,7 +270,7 @@ function processFunctionDefinitionAstNode(
 }
 
 function processModifierDefinitionAstNode(
-  modifierDefinitionNode: any,
+  modifierDefinitionNode: ModifierDefinition,
   fileIdToSourceFile: Map<number, SourceFile>,
   contract: Contract,
   file: SourceFile
@@ -302,7 +308,7 @@ function canonicalAbiTypeForElementaryOrUserDefinedTypes(keyType: any): any {
 }
 
 function getPublicVariableSelectorFromDeclarationAstNode(
-  variableDeclaration: any
+  variableDeclaration: VariableDeclaration
 ) {
   if (variableDeclaration.functionSelector !== undefined) {
     return Buffer.from(variableDeclaration.functionSelector, "hex");
@@ -334,7 +340,7 @@ function getPublicVariableSelectorFromDeclarationAstNode(
 }
 
 function processVariableDeclarationAstNode(
-  variableDeclarationNode: any,
+  variableDeclarationNode: VariableDeclaration,
   fileIdToSourceFile: Map<number, SourceFile>,
   contract: Contract,
   file: SourceFile,
@@ -554,7 +560,9 @@ function functionDefinitionKindToFunctionType(
   return ContractFunctionType.FUNCTION;
 }
 
-function astFunctionDefinitionToSelector(functionDefinition: any): Buffer {
+function astFunctionDefinitionToSelector(
+  functionDefinition: FunctionDefinition
+): Buffer {
   const paramTypes: string[] = [];
 
   // The function selector is available in solc versions >=0.6.0
