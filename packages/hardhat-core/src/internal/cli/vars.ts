@@ -125,7 +125,7 @@ function path() {
   return 0;
 }
 
-function setup(configPath: string | undefined) {
+async function setup(configPath: string | undefined) {
   log("Switching to SetupVarsManager to collect vars");
 
   const varsManagerSetup = new VarsManagerSetup(getVarsFilePath());
@@ -134,7 +134,7 @@ function setup(configPath: string | undefined) {
 
   try {
     log("Loading config and tasks to trigger vars collection");
-    loadConfigFile(configPath);
+    await loadConfigFile(configPath);
   } catch (err: any) {
     console.error(
       chalk.red(
@@ -154,7 +154,7 @@ function setup(configPath: string | undefined) {
 // The code below duplicates a section from the 'loadConfigAndTasks' function.
 // While we could have refactored the 'config-loading.ts' module to make this logic reusable,
 // it would have added complexity and potentially made the code harder to understand.
-function loadConfigFile(configPath: string | undefined) {
+async function loadConfigFile(configPath: string | undefined) {
   const configEnv = require(`../core/config/config-env`);
 
   // Load all the functions and objects exported by the 'config-env' file in a global scope
@@ -164,7 +164,7 @@ function loadConfigFile(configPath: string | undefined) {
   );
 
   const resolvedConfigPath = resolveConfigPath(configPath);
-  importCsjOrEsModule(resolvedConfigPath);
+  await importCsjOrEsModule(resolvedConfigPath);
 }
 
 async function getVarValue(): Promise<string> {

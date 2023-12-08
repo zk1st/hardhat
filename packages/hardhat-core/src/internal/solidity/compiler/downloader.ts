@@ -317,7 +317,7 @@ export class CompilerDownloader implements ICompilerDownloader {
     downloadPath: string
   ): Promise<boolean> {
     const ethereumjsUtil = require("@nomicfoundation/ethereumjs-util");
-    const { keccak256 } = await import("../../util/keccak");
+    const { keccak256 } = await import("../../util/keccak.js");
 
     const expectedKeccak256 = build.keccak256;
     const compiler = await fsExtra.readFile(downloadPath);

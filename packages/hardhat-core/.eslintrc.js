@@ -15,8 +15,8 @@ module.exports = {
     {
       files: [
         "src/internal/cli/cli.ts",
-        "src/register.ts",
-        "src/internal/lib/hardhat-lib.ts",
+        "src/register.mts",
+        "src/internal/lib/hardhat-lib.mts",
         "src/config.ts",
         "src/plugins.ts",
         "src/types/**/*.ts",

@@ -192,7 +192,7 @@ export class VMDebugTracer {
   }
 
   private async _afterTxHandler(result: AfterTxEvent, next: any) {
-    const { default: flattenDeep } = await import("lodash/flattenDeep");
+    const { default: flattenDeep } = await import("lodash/flattenDeep.js");
     const topLevelMessage = this._messages[0];
 
     const nestedStructLogs = await this._messageToNestedStructLogs(

@@ -25,10 +25,10 @@ import { DEFAULT_SOLC_VERSION } from "./default-config";
 
 const log = debug("hardhat:core:config");
 
-export function importCsjOrEsModule(filePath: string): any {
+export async function importCsjOrEsModule(filePath: string): Promise<any> {
   try {
-    const imported = require(filePath);
-    return imported.default !== undefined ? imported.default : imported;
+    const imported = await import(filePath);
+    return imported.default;
   } catch (e: any) {
     if (e.code === "ERR_REQUIRE_ESM") {
       throw new HardhatError(
@@ -55,7 +55,7 @@ export function resolveConfigPath(configPath: string | undefined) {
   return configPath;
 }
 
-export function loadConfigAndTasks(
+export async function loadConfigAndTasks(
   hardhatArguments?: Partial<HardhatArguments>,
   {
     showEmptyConfigWarning = false,
@@ -67,11 +67,13 @@ export function loadConfigAndTasks(
     showEmptyConfigWarning: false,
     showSolidityConfigWarnings: false,
   }
-): { resolvedConfig: HardhatConfig; userConfig: HardhatUserConfig } {
+): Promise<{ resolvedConfig: HardhatConfig; userConfig: HardhatUserConfig }> {
   let configPath =
     hardhatArguments !== undefined ? hardhatArguments.config : undefined;
 
-  configPath = resolveConfigPath(configPath);
+  // configPath = resolveConfigPath(configPath);
+
+  configPath = path.join(process.cwd(), "hardhat.config.ts");
   log(`Loading Hardhat config from ${configPath}`);
   // Before loading the builtin tasks, the default and user's config we expose
   // the config env in the global object.
@@ -91,7 +93,7 @@ export function loadConfigAndTasks(
 
   try {
     require("../tasks/builtin-tasks");
-    userConfig = importCsjOrEsModule(configPath);
+    userConfig = await importCsjOrEsModule(configPath);
   } catch (e) {
     analyzeModuleNotFoundError(e, configPath);
 

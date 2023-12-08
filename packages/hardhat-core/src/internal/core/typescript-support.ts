@@ -38,9 +38,9 @@ export function isTypescriptSupported() {
   return cachedIsTypescriptSupported;
 }
 
-export function loadTsNode(
-  tsConfigPath?: string,
-  shouldTypecheck: boolean = false
+export async function loadTsNode(
+  tsConfigPath?: string
+  /* shouldTypecheck: boolean = false */
 ) {
   try {
     require.resolve("typescript");
@@ -48,16 +48,19 @@ export function loadTsNode(
     throw new HardhatError(ERRORS.GENERAL.TYPESCRIPT_NOT_INSTALLED);
   }
 
-  try {
+  /*   try {
     require.resolve("ts-node");
   } catch {
     throw new HardhatError(ERRORS.GENERAL.TS_NODE_NOT_INSTALLED);
-  }
+  } */
 
   // If we are running tests we just want to transpile
   if (isRunningHardhatCoreTests()) {
     // eslint-disable-next-line import/no-extraneous-dependencies
-    require("ts-node/register/transpile-only");
+    // require("ts-node/register/transpile-only");
+
+    // @ts-ignore
+    await import("tsx/esm");
     return;
   }
 
@@ -70,14 +73,16 @@ export function loadTsNode(
     process.env.TS_NODE_FILES = "true";
   }
 
-  let tsNodeRequirement = "ts-node/register";
+  /*   let tsNodeRequirement = "ts-node/register";
 
   if (!shouldTypecheck) {
     tsNodeRequirement += "/transpile-only";
-  }
+  } */
 
   // eslint-disable-next-line import/no-extraneous-dependencies
-  require(tsNodeRequirement);
+  // require(tsNodeRequirement);
+  // @ts-ignore
+  await import("tsx/esm");
 }
 
 function isNonEsmTypescriptFile(path: string): boolean {

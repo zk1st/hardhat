@@ -201,7 +201,9 @@ async function main() {
     }
 
     if (willRunWithTypescript(hardhatArguments.config)) {
-      loadTsNode(hardhatArguments.tsconfig, hardhatArguments.typecheck);
+      await loadTsNode(
+        hardhatArguments.tsconfig /* , hardhatArguments.typecheck */
+      );
     } else {
       if (hardhatArguments.typecheck === true) {
         throw new HardhatError(
@@ -216,7 +218,7 @@ async function main() {
       process.exit(await handleVars(allUnparsedCLAs, hardhatArguments.config));
     }
 
-    const { resolvedConfig, userConfig } = loadConfigAndTasks(
+    const { resolvedConfig, userConfig } = await loadConfigAndTasks(
       hardhatArguments,
       {
         showEmptyConfigWarning: true,

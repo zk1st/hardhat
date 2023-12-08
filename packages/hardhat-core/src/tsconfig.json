@@ -3,8 +3,11 @@
   "compilerOptions": {
     "outDir": "../",
     "rootDirs": ["."],
-    "composite": true
+    "composite": true,
+    "target": "ES2022",
+    "module": "Node16",
+    "esModuleInterop": true
   },
-  "include": ["./**/*.ts"],
+  "include": ["./**/*.*ts"],
   "exclude": []
 }

@@ -20,7 +20,7 @@
     "solidity"
   ],
   "bin": {
-    "hardhat": "internal/cli/bootstrap.js"
+    "hardhat": "internal/cli/bootstrap.mjs"
   },
   "scripts": {
     "lint": "pnpm prettier --check && pnpm eslint",
@@ -34,7 +34,7 @@
     "test:forking": "mocha --recursive \"test/internal/hardhat-network/{helpers,jsonrpc,provider}/**/*.ts\"",
     "build": "tsc --build .",
     "prepublishOnly": "pnpm build",
-    "clean": "rimraf builtin-tasks internal types utils *.d.ts *.map *.js build-test tsconfig.tsbuildinfo test/internal/hardhat-network/provider/.hardhat_node_test_cache test/internal/hardhat-network/stack-traces/test-files/artifacts"
+    "clean": "rimraf builtin-tasks internal types utils *.d.ts *.map *.js *.mjs build-test tsconfig.tsbuildinfo test/internal/hardhat-network/provider/.hardhat_node_test_cache test/internal/hardhat-network/stack-traces/test-files/artifacts"
   },
   "files": [
     "builtin-tasks/",
@@ -141,6 +141,7 @@
     "source-map-support": "^0.5.13",
     "stacktrace-parser": "^0.1.10",
     "tsort": "0.0.1",
+    "tsx": "^4.6.2",
     "undici": "^5.14.0",
     "uuid": "^8.3.2",
     "ws": "^7.4.6"

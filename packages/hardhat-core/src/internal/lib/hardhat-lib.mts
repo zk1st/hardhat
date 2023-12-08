@@ -1,13 +1,13 @@
 import debug from "debug";
 
-import { HardhatRuntimeEnvironment } from "../../types";
-import { HardhatContext } from "../context";
-import { loadConfigAndTasks } from "../core/config/config-loading";
-import { HardhatError } from "../core/errors";
-import { ERRORS } from "../core/errors-list";
-import { getEnvHardhatArguments } from "../core/params/env-variables";
-import { HARDHAT_PARAM_DEFINITIONS } from "../core/params/hardhat-params";
-import { Environment } from "../core/runtime-environment";
+import { HardhatRuntimeEnvironment } from "../../types/index.js";
+import { HardhatContext } from "../context.js";
+import { loadConfigAndTasks } from "../core/config/config-loading.js";
+import { HardhatError } from "../core/errors.js";
+import { ERRORS } from "../core/errors-list.js";
+import { getEnvHardhatArguments } from "../core/params/env-variables.js";
+import { HARDHAT_PARAM_DEFINITIONS } from "../core/params/hardhat-params.js";
+import { Environment } from "../core/runtime-environment.js";
 
 let ctx: HardhatContext;
 let env: HardhatRuntimeEnvironment;
@@ -34,7 +34,9 @@ if (HardhatContext.isCreated()) {
     debug.enable("hardhat*");
   }
 
-  const { resolvedConfig, userConfig } = loadConfigAndTasks(hardhatArguments);
+  const { resolvedConfig, userConfig } = await loadConfigAndTasks(
+    hardhatArguments
+  );
 
   env = new Environment(
     resolvedConfig,
@@ -50,4 +52,5 @@ if (HardhatContext.isCreated()) {
   ctx.setHardhatRuntimeEnvironment(env);
 }
 
-export = env;
+// eslint-disable-next-line import/no-default-export
+export default env;
