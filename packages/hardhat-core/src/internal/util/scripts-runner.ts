@@ -2,7 +2,7 @@ import debug from "debug";
 import path from "path";
 
 import { HardhatArguments } from "../../types";
-import { isRunningHardhatCoreTests } from "../core/execution-mode";
+// import { isRunningHardhatCoreTests } from "../core/execution-mode";
 import { getEnvVariablesMap } from "../core/params/env-variables";
 
 const log = debug("hardhat:core:scripts-runner");
@@ -21,8 +21,8 @@ export async function runScript(
     const nodeArgs = [
       ...processExecArgv,
       ...getTsNodeArgsIfNeeded(
-        scriptPath,
-        extraEnvVars.HARDHAT_TYPECHECK === "true"
+        scriptPath
+        /* extraEnvVars.HARDHAT_TYPECHECK === "true" */
       ),
       ...extraNodeArgs,
     ];
@@ -58,8 +58,8 @@ export async function runScriptWithHardhat(
     scriptArgs,
     [
       ...extraNodeArgs,
-      "--require",
-      path.join(__dirname, "..", "..", "register"),
+      "--import",
+      path.join(__dirname, "..", "..", "register.mjs"),
     ],
     {
       ...getEnvVariablesMap(hardhatArguments),
@@ -94,10 +94,10 @@ function withFixedInspectArg(argv: string[]) {
 }
 
 function getTsNodeArgsIfNeeded(
-  scriptPath: string,
-  shouldTypecheck: boolean
+  scriptPath: string
+  /* shouldTypecheck: boolean */
 ): string[] {
-  if (process.execArgv.includes("ts-node/register")) {
+  /*   if (process.execArgv.includes("ts-node/register")) {
     return [];
   }
 
@@ -105,15 +105,15 @@ function getTsNodeArgsIfNeeded(
   // take forever
   if (isRunningHardhatCoreTests()) {
     return ["--require", "ts-node/register/transpile-only"];
-  }
+  } */
 
   // If the script we are going to run is .ts we need ts-node
-  if (/\.tsx?$/i.test(scriptPath)) {
+  /*   if (/\.tsx?$/i.test(scriptPath)) {
     return [
       "--require",
       `ts-node/register${shouldTypecheck ? "" : "/transpile-only"}`,
     ];
-  }
+  } */
 
-  return [];
+  return /\.m?ts$/i.test(scriptPath) ? ["--import", "tsx/esm"] : [];
 }
