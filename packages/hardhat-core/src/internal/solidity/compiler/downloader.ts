@@ -98,6 +98,10 @@ export class CompilerDownloader implements ICompilerDownloader {
       case "win32":
         return CompilerPlatform.WINDOWS;
       case "linux":
+        if (os.arch() === "arm64") {
+          return CompilerPlatform.WASM;
+        }
+
         return CompilerPlatform.LINUX;
       case "darwin":
         return CompilerPlatform.MACOS;

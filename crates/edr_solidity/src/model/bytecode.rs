@@ -5,16 +5,19 @@ use super::{
     source_map::SourceMap,
 };
 
+#[derive(Debug)]
 pub enum BytecodeType {
     Runtime,
     Deployment,
 }
 
+#[derive(Debug)]
 pub struct ImmutableReference {
     pub offset: usize,
     pub length: usize,
 }
 
+#[derive(Debug)]
 pub struct Bytecode {
     pub contract_id: usize,
     pub bytecode_type: BytecodeType,

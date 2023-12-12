@@ -1,49 +1,55 @@
-use super::source_map::SourceMap;
+use super::source_location::SourceLocation;
 
-pub struct Function {
-    pub name: String,
-    pub source_map: SourceMap,
+#[derive(Debug)]
+pub enum Function {
+    FreeFunction(FreeFunction),
+    ContractFunction(ContractFunction),
 }
 
-// export enum ContractFunctionType {
-//   CONSTRUCTOR,
-//   FUNCTION,
-//   FALLBACK,
-//   RECEIVE,
-//   GETTER,
-//   MODIFIER,
-//   FREE_FUNCTION,
-// }
+#[derive(Debug)]
+pub struct FreeFunction {
+    pub name: String,
+    pub location: SourceLocation,
+}
 
-// export enum ContractFunctionVisibility {
-//   PRIVATE,
-//   INTERNAL,
-//   PUBLIC,
-//   EXTERNAL,
-// }
+#[derive(Debug)]
+pub enum ContractFunction {
+    Constructor(AnonymousContractFunction),
+    Fallback(AnonymousContractFunction),
+    Receive(AnonymousContractFunction),
+    Modifier(InternalContractFunction),
+    Getter(PublicContractFunction),
+    PublicFunction(PublicContractFunction),
+    InternalFunction(InternalContractFunction),
+}
 
-// export class ContractFunction {
-//   constructor(
-//     public readonly name: string,
-//     public readonly type: ContractFunctionType,
-//     public readonly location: SourceLocation,
-//     public readonly contract?: Contract,
-//     public readonly visibility?: ContractFunctionVisibility,
-//     public readonly isPayable?: boolean,
-//     public selector?: Buffer,
-//     public readonly paramTypes?: any[]
-//   ) {
-//     if (contract !== undefined && !contract.location.contains(location)) {
-//       throw new Error("Incompatible contract and function location");
-//     }
-//   }
+#[derive(Debug)]
+pub struct AnonymousContractFunction {
+    pub name: String,
+    pub location: SourceLocation,
+    pub contract_id: u32,
+    pub is_public: bool,
+}
 
-//   public isValidCalldata(calldata: Buffer): boolean {
-//     if (this.paramTypes === undefined) {
-//       // if we don't know the param types, we just assume that the call is
-// valid       return true;
-//     }
+#[derive(Debug)]
+pub struct PublicContractFunction {
+    pub name: String,
+    pub location: SourceLocation,
+    pub contract_id: u32,
+    pub payable: bool,
+    pub selector: [u8; 4],
+    pub method_identifier: String,
+}
 
-//     return AbiHelpers.isValidCalldata(this.paramTypes, calldata);
-//   }
-// }
+#[derive(Debug)]
+pub struct InternalContractFunction {
+    pub name: String,
+    pub location: SourceLocation,
+    pub contract_id: u32,
+}
+
+impl PublicContractFunction {
+    pub fn is_valid_calldata(calldata: &[u8]) -> bool {
+        true
+    }
+}

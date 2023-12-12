@@ -1,27 +1,28 @@
 use std::collections::HashMap;
 
 use super::{
-    contract::Contract, function::Function, source_file::SourceFile, source_map::SourceMap,
+    bytecode::Bytecode, contract::Contract, custom_error::CustomError, function::Function,
+    source_file::SourceFile, source_location::SourceLocation,
 };
 
+#[derive(Default, Debug)]
 pub struct Codebase {
-    // A mapping from source file IDs (as provided by solc's output) to source file.
-    source_files: HashMap<u32, SourceFile>,
+    pub source_files: HashMap<u32, SourceFile>,
 
-    // A vector of contracts, where the vector index is used as contract ID.
-    contracts: Vec<Contract>,
-    // functions?
-    // custom errors?
+    pub contracts: HashMap<u32, Contract>,
+    pub functions: HashMap<u32, Function>,
 
-    // compiler version
+    pub custom_errors: HashMap<u32, CustomError>,
+    // TODO: compiler version
+    pub bytecodes: Vec<Bytecode>,
 }
 
 impl Codebase {
-    pub fn get_contract(source_map: &SourceMap) -> Option<&Contract> {
+    pub fn get_contract(source_location: &SourceLocation) -> Option<&Contract> {
         None
     }
 
-    pub fn get_function(source_map: &SourceMap) -> Option<&Function> {
+    pub fn get_function(source_location: &SourceLocation) -> Option<&Function> {
         None
     }
 }

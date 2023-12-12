@@ -1,5 +1,4 @@
-use super::source_map::SourceMap;
-
+#[derive(Debug)]
 pub struct CustomError {
     pub name: String,
     // TODO: Selector

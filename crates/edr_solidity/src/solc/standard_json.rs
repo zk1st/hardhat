@@ -14,10 +14,11 @@ pub struct CompilerInput {
     pub sources: HashMap<String, CompilerInputSourceFile>,
 }
 
+#[derive(Debug, Deserialize)]
 pub struct CompilerOutput {
-    sources: HashMap<String, CompilerOutputSource>,
+    pub sources: HashMap<String, CompilerOutputSource>,
     // Sourcename to contractname to contract
-    contracts: HashMap<String, HashMap<String, CompilerOutputContract>>,
+    pub contracts: HashMap<String, HashMap<String, CompilerOutputContract>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -59,7 +60,14 @@ pub struct HexBytecodeSlice {
 
 #[cfg(test)]
 mod tests {
+    use std::{
+        fs, io,
+        path::{Path, PathBuf},
+        str::FromStr,
+    };
+
     use super::*;
+    use crate::solc::model_builder::build_model;
 
     #[test]
     fn test_ignore_extra_fields() {
@@ -99,5 +107,87 @@ mod tests {
         );
     }
 
-    fn test_deserialize_output() {}
+    #[test]
+    fn test_deserialize_output() {
+        let crate_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let artifacts_path = crate_root.join("../../packages/hardhat-core/test/internal/hardhat-network/stack-traces/test-files/artifacts");
+
+        if !artifacts_path.exists() {
+            println!(
+                "Skipping test_deserialize_output because the test files haven't been compiled yet."
+            );
+            return;
+        }
+
+        visit_dirs(artifacts_path.as_path(), &|path| {
+            let file_name = path.file_name().unwrap().to_str().unwrap();
+            let path = path.to_str().unwrap();
+
+            if file_name.starts_with("compiler-output") && file_name.ends_with(".json") {
+                println!("Testing {path}\n\n\n\n\n");
+                let input_content = fs::read_to_string(path.replace("output", "input")).unwrap();
+                let output_content = fs::read_to_string(path).unwrap();
+
+                let codebase = build_model(&input_content, &output_content).unwrap();
+
+                print!("{:#?}\n\n\n\n\n\n\n", &codebase);
+            }
+        })
+        .unwrap();
+    }
+
+    #[test]
+    fn test() {
+        println!(
+            "{:#?}",
+            alloy_json_abi::Function::parse("i()").unwrap().selector()
+        );
+
+        println!(
+            "{:#?}",
+            alloy_json_abi::Function::parse("sss(address,address,uint256,uint256)")
+                .unwrap()
+                .selector()
+        );
+
+        let custom_error: alloy_json_abi::Error = serde_json::from_str(
+            r#"{
+			"inputs": [
+				{
+					"internalType": "int256",
+					"name": "i",
+					"type": "int256"
+				},
+				{
+					"internalType": "string",
+					"name": "asd",
+					"type": "string"
+				}
+			],
+			"name": "Foo",
+			"type": "error"
+		}"#,
+        )
+        .unwrap();
+
+        println!("{:#?}", custom_error);
+    }
+
+    fn visit_dirs<F>(dir: &Path, file_operation: &F) -> io::Result<()>
+    where
+        F: Fn(&PathBuf),
+    {
+        if dir.is_dir() {
+            for entry in fs::read_dir(dir)? {
+                let entry = entry?;
+                let path = entry.path();
+                if path.is_dir() {
+                    visit_dirs(&path, file_operation)?;
+                } else {
+                    file_operation(&path);
+                }
+            }
+        }
+        Ok(())
+    }
 }
