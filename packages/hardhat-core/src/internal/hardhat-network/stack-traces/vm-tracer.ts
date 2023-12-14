@@ -26,7 +26,7 @@ export class VMTracer {
   private _messageTraces: MessageTrace[] = [];
   private _enabled = false;
   private _lastError: Error | undefined;
-  private _maxPrecompileNumber = getActivePrecompiles(this._vm._common).size;
+  private _maxPrecompileNumber: number;
 
   constructor(
     private readonly _vm: VM,
@@ -36,6 +36,7 @@ export class VMTracer {
     this._beforeMessageHandler = this._beforeMessageHandler.bind(this);
     this._stepHandler = this._stepHandler.bind(this);
     this._afterMessageHandler = this._afterMessageHandler.bind(this);
+    this._maxPrecompileNumber = getActivePrecompiles(this._vm._common).size;
   }
 
   public enableTracing() {

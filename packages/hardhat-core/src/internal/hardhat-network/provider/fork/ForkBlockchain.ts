@@ -34,7 +34,7 @@ export class ForkBlockchain
   extends BlockchainBase
   implements HardhatBlockchainInterface
 {
-  private _latestBlockNumber = this._forkBlockNumber;
+  private _latestBlockNumber: bigint;
 
   constructor(
     private _jsonRpcClient: JsonRpcClient,
@@ -42,6 +42,7 @@ export class ForkBlockchain
     common: Common
   ) {
     super(common);
+    this._latestBlockNumber = this._forkBlockNumber;
   }
 
   public getLatestBlockNumber(): bigint {

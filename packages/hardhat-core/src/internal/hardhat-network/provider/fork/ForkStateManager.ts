@@ -49,7 +49,7 @@ export class ForkStateManager implements StateManager {
   private _stateRootToState: Map<string, State> = new Map();
   private _originalStorageCache: Map<string, Buffer> = new Map();
   private _stateCheckpoints: string[] = [];
-  private _contextBlockNumber = this._forkBlockNumber;
+  private _contextBlockNumber: bigint;
   private _contextChanged = false;
 
   constructor(
@@ -59,6 +59,8 @@ export class ForkStateManager implements StateManager {
     this._state = ImmutableMap<string, ImmutableRecord<AccountState>>();
 
     this._stateRootToState.set(this._initialStateRoot, this._state);
+
+    this._contextBlockNumber = this._forkBlockNumber;
   }
 
   public async initializeGenesisAccounts(genesisAccounts: GenesisAccount[]) {
