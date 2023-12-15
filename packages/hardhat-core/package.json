@@ -96,8 +96,8 @@
     "rimraf": "^3.0.2",
     "sinon": "^9.0.0",
     "time-require": "^0.1.2",
-    "ts-node": "^10.8.0",
-    "typescript": "~5.0.0"
+    "tsx": "^4.6.2",
+    "typescript": "~5.3.3"
   },
   "dependencies": {
     "@ethersproject/abi": "^5.1.2",
@@ -145,20 +145,19 @@
     "source-map-support": "^0.5.13",
     "stacktrace-parser": "^0.1.10",
     "tsort": "0.0.1",
-    "tsx": "^4.6.2",
     "undici": "^5.14.0",
     "uuid": "^8.3.2",
     "ws": "^7.4.6"
   },
   "peerDependencies": {
-    "ts-node": "*",
+    "tsx": "*",
     "typescript": "*"
   },
   "peerDependenciesMeta": {
-    "ts-node": {
+    "typescript": {
       "optional": true
     },
-    "typescript": {
+    "tsx": {
       "optional": true
     }
   },
