@@ -5,26 +5,27 @@ use std::{
 
 use edr_eth::{
     block::{BlobGas, BlockOptions, Header, PartialHeader},
-    log::Log,
+    log::{add_log_to_bloom, Log},
     receipt::{TransactionReceipt, TypedReceipt, TypedReceiptData},
     transaction::SignedTransaction,
     trie::ordered_trie_root,
     Address, Bloom, U256,
 };
 use revm::{
-    db::DatabaseComponentError,
+    db::{DatabaseComponentError, WrapDatabaseRef},
     primitives::{
         AccountInfo, BlobExcessGasAndPrice, BlockEnv, CfgEnv, EVMError, ExecutionResult,
         InvalidHeader, InvalidTransaction, Output, ResultAndState, SpecId,
     },
+    Inspector,
 };
 
 use super::local::LocalBlock;
 use crate::{
     blockchain::SyncBlockchain,
-    evm::{build_evm, run_transaction, SyncInspector},
+    evm::{build_evm, run_transaction},
     state::{AccountModifierFn, StateDiff, SyncState},
-    PendingTransaction,
+    PendingTransaction, SyncDatabase,
 };
 
 /// An error caused during construction of a block builder.
@@ -48,9 +49,9 @@ pub enum BlockTransactionError<BE, SE> {
     #[error("Sender doesn't have enough funds to send tx. The max upfront cost is: {max_upfront_cost} and the sender's balance is: {sender_balance}.")]
     InsufficientFunds {
         /// The maximum upfront cost of the transaction
-        max_upfront_cost: U256,
+        max_upfront_cost: Box<U256>,
         /// The sender's balance
-        sender_balance: U256,
+        sender_balance: Box<U256>,
     },
     /// Corrupt transaction data
     #[error("Invalid transaction: {0:?}")]
@@ -70,7 +71,7 @@ where
             EVMError::Transaction(e) => match e {
                 InvalidTransaction::LackOfFundForMaxFee { fee, balance } => {
                     Self::InsufficientFunds {
-                        max_upfront_cost: U256::from(fee),
+                        max_upfront_cost: fee,
                         sender_balance: balance,
                     }
                 }
@@ -181,7 +182,11 @@ impl BlockBuilder {
         blockchain: &dyn SyncBlockchain<BlockchainErrorT, StateErrorT>,
         state: &mut dyn SyncState<StateErrorT>,
         transaction: PendingTransaction,
-        inspector: Option<&mut dyn SyncInspector<BlockchainErrorT, StateErrorT>>,
+        inspector: Option<
+            &mut dyn Inspector<
+                WrapDatabaseRef<&SyncDatabase<'_, '_, BlockchainErrorT, StateErrorT>>,
+            >,
+        >,
     ) -> Result<ExecutionResult, BlockTransactionError<BlockchainErrorT, StateErrorT>>
     where
         BlockchainErrorT: Debug + Send,
@@ -233,9 +238,9 @@ impl BlockBuilder {
 
         let logs: Vec<Log> = result.logs().into_iter().map(Log::from).collect();
         let logs_bloom = {
-            let mut bloom = Bloom::zero();
+            let mut bloom = Bloom::ZERO;
             for log in &logs {
-                log.add_to_bloom(&mut bloom);
+                add_log_to_bloom(log, &mut bloom);
             }
             bloom
         };
@@ -342,7 +347,7 @@ impl BlockBuilder {
             .expect("Must be able to calculate state root");
 
         self.header.logs_bloom = {
-            let mut logs_bloom = Bloom::zero();
+            let mut logs_bloom = Bloom::ZERO;
             self.receipts.iter().for_each(|receipt| {
                 logs_bloom.accrue_bloom(receipt.logs_bloom());
             });
@@ -352,7 +357,7 @@ impl BlockBuilder {
         self.header.receipts_root = ordered_trie_root(
             self.receipts
                 .iter()
-                .map(|receipt| rlp::encode(&**receipt).freeze()),
+                .map(|receipt| alloy_rlp::encode(&**receipt)),
         );
 
         if let Some(timestamp) = timestamp {

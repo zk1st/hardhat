@@ -167,6 +167,7 @@ impl_block_tags!(PreEip1898BlockSpec);
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::U256;
 
     fn help_test_block_spec_serde(block_spec: BlockSpec) {
         let json = serde_json::json!(block_spec).to_string();
@@ -184,7 +185,7 @@ mod tests {
         help_test_block_spec_serde(BlockSpec::Tag(BlockTag::Pending));
         help_test_block_spec_serde(BlockSpec::Tag(BlockTag::Safe));
         help_test_block_spec_serde(BlockSpec::Eip1898(Eip1898BlockSpec::Hash {
-            block_hash: B256::from_low_u64_ne(1),
+            block_hash: B256::from(U256::from(1)),
             require_canonical: Some(true),
         }));
         help_test_block_spec_serde(BlockSpec::Eip1898(Eip1898BlockSpec::Number {

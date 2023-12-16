@@ -7,11 +7,11 @@
 
 pub use revm::{
     interpreter::{
-        instruction_result::SuccessOrHalt, opcode, return_revert, CallInputs, CreateInputs, Gas,
-        InstructionResult, Interpreter, OPCODE_JUMPMAP,
+        opcode, return_revert, CallInputs, CreateInputs, Gas, InstructionResult, Interpreter,
+        SuccessOrHalt, OPCODE_JUMPMAP,
     },
     primitives::*,
-    EVMData, Inspector,
+    EvmContext, Inspector,
 };
 
 pub use crate::{
@@ -20,7 +20,6 @@ pub use crate::{
         debug_trace_transaction, execution_result_to_debug_result, DebugTraceConfig,
         DebugTraceLogItem, DebugTraceResult, TracerEip3155,
     },
-    evm::SyncInspector,
     inspector::*,
     mempool::{MemPool, MinerTransactionError, OrderedTransaction},
     miner::*,

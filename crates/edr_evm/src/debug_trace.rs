@@ -1,13 +1,16 @@
-use std::{collections::HashMap, fmt::Debug};
+use std::{collections::HashMap, fmt::Debug, ops::Range};
 
 use edr_eth::{signature::SignatureError, B256};
 use revm::{
     inspectors::GasInspector,
-    interpreter::{opcode, CallInputs, CreateInputs, Gas, InstructionResult, Interpreter, Stack},
-    primitives::{
-        hex, Address, BlockEnv, Bytes, CfgEnv, ExecutionResult, ResultAndState, SpecId, B160, U256,
+    interpreter::{
+        opcode, CallInputs, CreateInputs, Gas, InstructionResult, Interpreter, InterpreterResult,
+        Stack,
     },
-    EVMData, Inspector, JournalEntry,
+    primitives::{
+        hex, Address, BlockEnv, Bytes, CfgEnv, ExecutionResult, ResultAndState, SpecId, U256,
+    },
+    Database, EvmContext, Inspector, JournalEntry,
 };
 
 use crate::{
@@ -187,19 +190,16 @@ pub struct DebugTraceLogItem {
 #[derive(Debug)]
 pub struct TracerEip3155 {
     config: DebugTraceConfig,
-
     logs: Vec<DebugTraceLogItem>,
-
     gas_inspector: GasInspector,
-
     contract_address: Address,
     gas_remaining: u64,
-    memory: Vec<u8>,
+    shared_memory: Vec<u8>,
     mem_size: usize,
     opcode: u8,
     pc: usize,
     skip: bool,
-    stack: Stack,
+    stack: Vec<U256>,
     // Contract-specific storage
     storage: HashMap<Address, HashMap<String, String>>,
 }
@@ -211,49 +211,45 @@ impl TracerEip3155 {
             config,
             logs: Vec::default(),
             gas_inspector: GasInspector::default(),
-            contract_address: B160::default(),
-            stack: Stack::new(),
+            contract_address: Address::default(),
+            stack: Vec::new(),
             pc: 0,
             opcode: 0,
             gas_remaining: 0,
-            memory: Vec::default(),
+            shared_memory: Vec::default(),
             mem_size: 0,
             skip: false,
             storage: HashMap::default(),
         }
     }
 
-    fn record_log<DatabaseErrorT>(&mut self, data: &mut dyn EVMData<DatabaseErrorT>) {
-        let depth = data.journaled_state().depth();
+    fn record_log<DB>(&mut self, data: &mut EvmContext<'_, DB>)
+    where
+        DB: Database,
+    {
+        let depth = data.journaled_state.depth();
 
         let stack = if self.config.disable_stack {
             None
         } else {
-            Some(
-                self.stack
-                    .data()
-                    .iter()
-                    .map(to_hex_word)
-                    .collect::<Vec<String>>(),
-            )
+            Some(self.stack.iter().map(to_hex_word).collect::<Vec<String>>())
         };
 
         let memory = if self.config.disable_memory {
             None
         } else {
-            Some(self.memory.chunks(32).map(hex::encode).collect())
+            Some(self.shared_memory.chunks(32).map(hex::encode).collect())
         };
 
         let storage = if self.config.disable_storage {
             None
         } else {
             if matches!(self.opcode, opcode::SLOAD | opcode::SSTORE) {
-                let journaled_state = data.journaled_state();
-                let last_entry = journaled_state.journal.last().and_then(|v| v.last());
+                let last_entry = data.journaled_state.journal.last().and_then(|v| v.last());
                 if let Some(JournalEntry::StorageChange { address, key, .. }) = last_entry {
-                    let value = journaled_state.state[address].storage[key].present_value();
+                    let value = data.journaled_state.state[address].storage[key].present_value();
                     let contract_storage = self.storage.entry(self.contract_address).or_default();
-                    contract_storage.insert(to_hex_word(key), to_hex_word(&value));
+                    contract_storage.insert(to_hex_word(&key), to_hex_word(&value));
                 }
             }
             Some(
@@ -308,111 +304,84 @@ impl TracerEip3155 {
     }
 }
 
-impl<DatabaseErrorT> Inspector<DatabaseErrorT> for TracerEip3155 {
-    fn initialize_interp(
-        &mut self,
-        interp: &mut Interpreter,
-        data: &mut dyn EVMData<DatabaseErrorT>,
-    ) -> InstructionResult {
+impl<DB> Inspector<DB> for TracerEip3155
+where
+    DB: Database,
+{
+    fn initialize_interp(&mut self, interp: &mut Interpreter, data: &mut EvmContext<'_, DB>) {
         self.gas_inspector.initialize_interp(interp, data);
-        InstructionResult::Continue
     }
 
-    fn step(
-        &mut self,
-        interp: &mut Interpreter,
-        data: &mut dyn EVMData<DatabaseErrorT>,
-    ) -> InstructionResult {
+    fn step(&mut self, interp: &mut Interpreter, data: &mut EvmContext<'_, DB>) {
         self.contract_address = interp.contract.address;
 
         self.gas_inspector.step(interp, data);
         self.gas_remaining = self.gas_inspector.gas_remaining();
 
         if !self.config.disable_stack {
-            self.stack = interp.stack.clone();
+            self.stack = interp.stack.data().clone();
         }
 
         if !self.config.disable_memory {
-            self.memory = interp.memory.data().clone();
+            self.shared_memory = interp.shared_memory.context_memory().to_vec();
         }
 
-        self.mem_size = interp.memory.len();
+        self.mem_size = interp.shared_memory.len();
 
         self.opcode = interp.current_opcode();
 
         self.pc = interp.program_counter();
-
-        InstructionResult::Continue
     }
 
-    fn step_end(
-        &mut self,
-        interp: &mut Interpreter,
-        data: &mut dyn EVMData<DatabaseErrorT>,
-        eval: InstructionResult,
-    ) -> InstructionResult {
-        self.gas_inspector.step_end(interp, data, eval);
+    fn step_end(&mut self, interp: &mut Interpreter, data: &mut EvmContext<'_, DB>) {
+        self.gas_inspector.step_end(interp, data);
 
         // Omit extra return https://github.com/bluealloy/revm/pull/563
         if self.skip {
             self.skip = false;
-            return InstructionResult::Continue;
-        };
+        }
 
         self.record_log(data);
-        InstructionResult::Continue
     }
 
     fn call(
         &mut self,
-        data: &mut dyn EVMData<DatabaseErrorT>,
+        data: &mut EvmContext<'_, DB>,
         _inputs: &mut CallInputs,
-    ) -> (InstructionResult, Gas, Bytes) {
+    ) -> Option<(InterpreterResult, Range<usize>)> {
         self.record_log(data);
-        (InstructionResult::Continue, Gas::new(0), Bytes::new())
+        None
     }
 
     fn call_end(
         &mut self,
-        data: &mut dyn EVMData<DatabaseErrorT>,
-        inputs: &CallInputs,
-        remaining_gas: Gas,
-        ret: InstructionResult,
-        out: Bytes,
-    ) -> (InstructionResult, Gas, Bytes) {
-        self.gas_inspector
-            .call_end(data, inputs, remaining_gas, ret, out.clone());
+        data: &mut EvmContext<'_, DB>,
+        result: InterpreterResult,
+    ) -> InterpreterResult {
+        self.gas_inspector.call_end(data, result.clone());
         self.skip = true;
-        (ret, remaining_gas, out)
+        result
     }
 
     fn create(
         &mut self,
-        data: &mut dyn EVMData<DatabaseErrorT>,
+        data: &mut EvmContext<'_, DB>,
         _inputs: &mut CreateInputs,
-    ) -> (InstructionResult, Option<B160>, Gas, Bytes) {
+    ) -> Option<(InterpreterResult, Option<Address>)> {
         self.record_log(data);
-        (
-            InstructionResult::Continue,
-            None,
-            Gas::new(0),
-            Bytes::default(),
-        )
+        None
     }
 
     fn create_end(
         &mut self,
-        data: &mut dyn EVMData<DatabaseErrorT>,
-        inputs: &CreateInputs,
-        ret: InstructionResult,
-        address: Option<B160>,
-        remaining_gas: Gas,
-        out: Bytes,
-    ) -> (InstructionResult, Option<B160>, Gas, Bytes) {
+        data: &mut EvmContext<'_, DB>,
+        result: InterpreterResult,
+        address: Option<Address>,
+    ) -> (InterpreterResult, Option<Address>) {
         self.gas_inspector
-            .create_end(data, inputs, ret, address, remaining_gas, out.clone());
+            .create_end(data, result.clone(), address.clone());
         self.skip = true;
-        (ret, address, remaining_gas, out)
+        (result, address)
     }
 }
 
