@@ -9,6 +9,7 @@ import semver from "semver";
 import {
   HardhatArguments,
   HardhatConfig,
+  HardhatTask,
   HardhatUserConfig,
   SolcConfig,
 } from "../../../types";
@@ -19,6 +20,7 @@ import { ERRORS } from "../errors-list";
 import { getUserConfigPath } from "../project-structure";
 
 import { SUPPORTED_SOLIDITY_VERSION_RANGE } from "../../hardhat-network/stack-traces/constants";
+import { task } from "../../../config";
 import { resolveConfig } from "./config-resolution";
 import { validateConfig, validateResolvedConfig } from "./config-validation";
 import { DEFAULT_SOLC_VERSION } from "./default-config";
@@ -94,6 +96,7 @@ export async function loadConfigAndTasks(
   try {
     require("../tasks/builtin-tasks");
     userConfig = await importCsjOrEsModule(configPath);
+    initializePluginTasks(userConfig.plugins);
   } catch (e) {
     analyzeModuleNotFoundError(e, configPath);
 
@@ -354,4 +357,11 @@ export function getConfiguredCompilers(
   const compilerVersions = solidityConfig.compilers;
   const overrideVersions = Object.values(solidityConfig.overrides);
   return [...compilerVersions, ...overrideVersions];
+}
+
+function initializePluginTasks(plugins: any[]) {
+  plugins?.forEach(
+    ({ defineTasks }: { defineTasks: (cb: HardhatTask) => void }) =>
+      defineTasks(task)
+  );
 }

@@ -279,6 +279,7 @@ export interface HardhatUserConfig {
   networks?: NetworksUserConfig;
   solidity?: SolidityUserConfig;
   mocha?: Mocha.MochaOptions;
+  plugins?: any[];
 }
 
 export interface HardhatConfig {

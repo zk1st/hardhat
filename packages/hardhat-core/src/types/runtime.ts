@@ -260,3 +260,9 @@ export type ProviderExtender = (
   config: HardhatConfig,
   network: string
 ) => EIP1193Provider | Promise<EIP1193Provider>;
+
+export type HardhatTask = <TaskArgumentsT extends TaskArguments>(
+  name: string,
+  description?: string,
+  action?: ActionType<TaskArgumentsT>
+) => ConfigurableTaskDefinition;

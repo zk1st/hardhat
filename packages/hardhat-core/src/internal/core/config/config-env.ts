@@ -3,7 +3,7 @@ import {
   ConfigExtender,
   ConfigurableScopeDefinition,
   ConfigurableTaskDefinition,
-  EnvironmentExtender,
+  /* EnvironmentExtender, */
   ExperimentalHardhatNetworkMessageTraceHook,
   ProviderExtender,
   TaskArguments,
@@ -138,10 +138,10 @@ export const types = argumentTypes;
  * @param extender A function that receives the Hardhat Runtime
  * Environment.
  */
-export function extendEnvironment(extender: EnvironmentExtender) {
+/* export function extendEnvironment(extender: EnvironmentExtender) {
   const ctx = HardhatContext.getHardhatContext();
   ctx.environmentExtenders.push(extender);
-}
+} */
 
 /**
  * Register a config extender what will be run after the
