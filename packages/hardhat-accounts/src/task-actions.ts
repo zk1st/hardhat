@@ -1,10 +1,12 @@
 import { ActionType } from "hardhat/types";
-import { deployContract } from "@nomicfoundation/hardhat-mini-viem/contracts";
 
 export const deployTaskAction: ActionType<any> = async ({
   contractName,
   constructorArgs,
 }) => {
+  const { deployContract } = await import(
+    "@nomicfoundation/hardhat-mini-viem/contracts"
+  );
   const contract = await deployContract(contractName, constructorArgs);
   console.log(`Contract deployed to: ${contract.address}`);
 };

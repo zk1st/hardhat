@@ -9,6 +9,7 @@ export default {
       const accounts = await hre.network.provider.send("eth_accounts");
       console.log(accounts);
     });
+
     task("deploy", "Deploys the specified contract")
       .addParam("contractName", "The name of the contract")
       .addOptionalVariadicPositionalParam(
