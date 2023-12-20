@@ -12,7 +12,7 @@ use std::fmt::Debug;
 
 use dyn_clone::DynClone;
 use edr_eth::{remote::RpcClientError, B256};
-use revm::{db::StateRef, DatabaseCommit};
+use revm::DatabaseCommit;
 
 pub use self::{
     debug::{AccountModifierFn, StateDebug},
@@ -24,6 +24,7 @@ pub use self::{
     remote::RemoteState,
     trie::{AccountTrie, TrieState},
 };
+use crate::runtime::DebuggableStateRef;
 
 /// Combinatorial error for the state API
 #[derive(Debug, thiserror::Error)]
@@ -49,7 +50,7 @@ pub enum StateError {
 
 /// Trait that meets all requirements for a synchronous database
 pub trait SyncState<E>:
-    StateRef<Error = E> + DatabaseCommit + StateDebug<Error = E> + Debug + DynClone + Send + Sync
+    DebuggableStateRef<Error = E> + DatabaseCommit + StateDebug<Error = E> + DynClone + Send + Sync
 where
     E: Debug + Send,
 {
@@ -66,10 +67,9 @@ where
 
 impl<S, E> SyncState<E> for S
 where
-    S: StateRef<Error = E>
+    S: DebuggableStateRef<Error = E>
         + DatabaseCommit
         + StateDebug<Error = E>
-        + Debug
         + DynClone
         + Send
         + Sync,

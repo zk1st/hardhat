@@ -3,10 +3,7 @@ use std::{collections::HashMap, fmt::Debug, ops::Range};
 use edr_eth::{signature::SignatureError, B256};
 use revm::{
     inspectors::GasInspector,
-    interpreter::{
-        opcode, CallInputs, CreateInputs, Gas, InstructionResult, Interpreter, InterpreterResult,
-        Stack,
-    },
+    interpreter::{opcode, CallInputs, CreateInputs, Interpreter, InterpreterResult},
     primitives::{
         hex, Address, BlockEnv, Bytes, CfgEnv, ExecutionResult, ResultAndState, SpecId, U256,
     },
@@ -223,10 +220,7 @@ impl TracerEip3155 {
         }
     }
 
-    fn record_log<DB>(&mut self, data: &mut EvmContext<'_, DB>)
-    where
-        DB: Database,
-    {
+    fn record_log<DatabaseErrorT>(&mut self, data: &mut EvmContext<'_, DatabaseErrorT>) {
         let depth = data.journaled_state.depth();
 
         let stack = if self.config.disable_stack {
@@ -304,15 +298,16 @@ impl TracerEip3155 {
     }
 }
 
-impl<DB> Inspector<DB> for TracerEip3155
-where
-    DB: Database,
-{
-    fn initialize_interp(&mut self, interp: &mut Interpreter, data: &mut EvmContext<'_, DB>) {
+impl<DatabaseError> Inspector<DatabaseError> for TracerEip3155 {
+    fn initialize_interp(
+        &mut self,
+        interp: &mut Interpreter,
+        data: &mut EvmContext<'_, DatabaseError>,
+    ) {
         self.gas_inspector.initialize_interp(interp, data);
     }
 
-    fn step(&mut self, interp: &mut Interpreter, data: &mut EvmContext<'_, DB>) {
+    fn step(&mut self, interp: &mut Interpreter, data: &mut EvmContext<'_, DatabaseError>) {
         self.contract_address = interp.contract.address;
 
         self.gas_inspector.step(interp, data);
@@ -333,7 +328,7 @@ where
         self.pc = interp.program_counter();
     }
 
-    fn step_end(&mut self, interp: &mut Interpreter, data: &mut EvmContext<'_, DB>) {
+    fn step_end(&mut self, interp: &mut Interpreter, data: &mut EvmContext<'_, DatabaseError>) {
         self.gas_inspector.step_end(interp, data);
 
         // Omit extra return https://github.com/bluealloy/revm/pull/563
@@ -346,7 +341,7 @@ where
 
     fn call(
         &mut self,
-        data: &mut EvmContext<'_, DB>,
+        data: &mut EvmContext<'_, DatabaseError>,
         _inputs: &mut CallInputs,
     ) -> Option<(InterpreterResult, Range<usize>)> {
         self.record_log(data);
@@ -355,7 +350,7 @@ where
 
     fn call_end(
         &mut self,
-        data: &mut EvmContext<'_, DB>,
+        data: &mut EvmContext<'_, DatabaseError>,
         result: InterpreterResult,
     ) -> InterpreterResult {
         self.gas_inspector.call_end(data, result.clone());
@@ -365,7 +360,7 @@ where
 
     fn create(
         &mut self,
-        data: &mut EvmContext<'_, DB>,
+        data: &mut EvmContext<'_, DatabaseError>,
         _inputs: &mut CreateInputs,
     ) -> Option<(InterpreterResult, Option<Address>)> {
         self.record_log(data);
@@ -374,7 +369,7 @@ where
 
     fn create_end(
         &mut self,
-        data: &mut EvmContext<'_, DB>,
+        data: &mut EvmContext<'_, DatabaseError>,
         result: InterpreterResult,
         address: Option<Address>,
     ) -> (InterpreterResult, Option<Address>) {

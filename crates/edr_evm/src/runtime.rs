@@ -1,21 +1,24 @@
 use std::fmt::Debug;
 
 use revm::{
-    db::{DatabaseComponents, StateRef, WrapDatabaseRef},
+    db::{DatabaseComponents, StateRef},
     primitives::{BlockEnv, CfgEnv, ExecutionResult, ResultAndState, SpecId, TxEnv},
-    Inspector,
 };
 
 use crate::{
     blockchain::SyncBlockchain,
-    evm::{build_evm, run_transaction},
+    evm::{build_evm, run_transaction, SyncInspector},
     state::{StateOverrides, StateRefOverrider, SyncState},
     transaction::TransactionError,
 };
 
+pub trait DebuggableStateRef: StateRef + Debug {}
+
+impl<T: StateRef + Debug> DebuggableStateRef for T {}
+
 /// Asynchronous implementation of the Database super-trait
 pub type SyncDatabase<'blockchain, 'state, BlockchainErrorT, StateErrorT> = DatabaseComponents<
-    &'state dyn StateRef<Error = StateErrorT>,
+    &'state dyn DebuggableStateRef<Error = StateErrorT>,
     &'blockchain dyn SyncBlockchain<BlockchainErrorT, StateErrorT>,
 >;
 
@@ -28,9 +31,7 @@ pub fn dry_run<BlockchainErrorT, StateErrorT>(
     cfg: CfgEnv,
     transaction: TxEnv,
     block: BlockEnv,
-    inspector: Option<
-        &mut dyn Inspector<WrapDatabaseRef<&SyncDatabase<'_, '_, BlockchainErrorT, StateErrorT>>>,
-    >,
+    inspector: Option<&mut dyn SyncInspector<BlockchainErrorT, StateErrorT>>,
 ) -> Result<ResultAndState, TransactionError<BlockchainErrorT, StateErrorT>>
 where
     BlockchainErrorT: Debug + Send,
@@ -61,9 +62,7 @@ pub fn guaranteed_dry_run<BlockchainErrorT, StateErrorT>(
     mut cfg: CfgEnv,
     transaction: TxEnv,
     block: BlockEnv,
-    inspector: Option<
-        &mut dyn Inspector<WrapDatabaseRef<&SyncDatabase<'_, '_, BlockchainErrorT, StateErrorT>>>,
-    >,
+    inspector: Option<&mut dyn SyncInspector<BlockchainErrorT, StateErrorT>>,
 ) -> Result<ResultAndState, TransactionError<BlockchainErrorT, StateErrorT>>
 where
     BlockchainErrorT: Debug + Send,
@@ -90,9 +89,7 @@ pub fn run<BlockchainErrorT, StateErrorT>(
     cfg: CfgEnv,
     transaction: TxEnv,
     block: BlockEnv,
-    inspector: Option<
-        &mut dyn Inspector<WrapDatabaseRef<&SyncDatabase<'_, '_, BlockchainErrorT, StateErrorT>>>,
-    >,
+    inspector: Option<&mut dyn SyncInspector<BlockchainErrorT, StateErrorT>>,
 ) -> Result<ExecutionResult, TransactionError<BlockchainErrorT, StateErrorT>>
 where
     BlockchainErrorT: Debug + Send,

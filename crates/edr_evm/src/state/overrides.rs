@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use edr_eth::{
     account::KECCAK_EMPTY,
     remote::{AccountOverrideOptions, StateOverrideOptions},
@@ -7,6 +9,8 @@ use revm::{
     db::StateRef,
     primitives::{AccountInfo, Bytecode, HashMap},
 };
+
+use crate::runtime::DebuggableStateRef;
 
 /// Type representing either a diff or full set of overrides for storage
 /// information.
@@ -170,7 +174,7 @@ impl StateOverrides {
     /// overrides.
     pub fn account_info<StateError>(
         &self,
-        state: &dyn StateRef<Error = StateError>,
+        state: &dyn DebuggableStateRef<Error = StateError>,
         address: &Address,
     ) -> Result<Option<AccountInfo>, StateError> {
         let original = state.basic(*address)?;
@@ -193,7 +197,7 @@ impl StateOverrides {
     /// applying any overrides.
     pub fn account_storage_at<StateError>(
         &self,
-        state: &dyn StateRef<Error = StateError>,
+        state: &dyn DebuggableStateRef<Error = StateError>,
         address: &Address,
         index: &U256,
     ) -> Result<U256, StateError> {
@@ -218,7 +222,7 @@ impl StateOverrides {
     /// Retrieves the code for the provided hash, applying any overrides.
     pub fn code_by_hash<StateError>(
         &self,
-        state: &dyn StateRef<Error = StateError>,
+        state: &dyn DebuggableStateRef<Error = StateError>,
         hash: B256,
     ) -> Result<Bytecode, StateError> {
         if let Some(code) = self.code_by_hash_overrides.get(&hash) {
@@ -247,16 +251,17 @@ impl TryFrom<StateOverrideOptions> for StateOverrides {
 }
 
 /// A wrapper around a state ref object that applies overrides.
+#[derive(Debug)]
 pub struct StateRefOverrider<'state, StateErrorT> {
     overrides: &'state StateOverrides,
-    state: &'state dyn StateRef<Error = StateErrorT>,
+    state: &'state dyn DebuggableStateRef<Error = StateErrorT>,
 }
 
 impl<'state, StateErrorT> StateRefOverrider<'state, StateErrorT> {
     /// Creates a new state ref overrider.
     pub fn new(
         overrides: &'state StateOverrides,
-        state: &'state dyn StateRef<Error = StateErrorT>,
+        state: &'state dyn DebuggableStateRef<Error = StateErrorT>,
     ) -> StateRefOverrider<'state, StateErrorT> {
         StateRefOverrider { overrides, state }
     }

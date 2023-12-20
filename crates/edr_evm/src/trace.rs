@@ -3,7 +3,7 @@ use std::{fmt::Debug, ops::Range};
 use edr_eth::{Address, Bytes, U256};
 use revm::{
     interpreter::{
-        opcode, return_revert, CallInputs, CreateInputs, Gas, InstructionResult, Interpreter,
+        opcode, return_revert, CallInputs, CreateInputs, InstructionResult, Interpreter,
         InterpreterResult, SuccessOrHalt,
     },
     primitives::{Bytecode, ExecutionResult, Output},
@@ -117,14 +117,13 @@ impl TraceCollector {
     }
 }
 
-impl<DB> Inspector<DB> for TraceCollector
+impl<DatabaseError> Inspector<DatabaseError> for TraceCollector
 where
-    DB: Database,
-    DB::Error: Debug,
+    DatabaseError: Debug,
 {
     fn call(
         &mut self,
-        context: &mut EvmContext<'_, DB>,
+        context: &mut EvmContext<'_, DatabaseError>,
         inputs: &mut CallInputs,
     ) -> Option<(InterpreterResult, Range<usize>)> {
         self.validate_before_message();
@@ -169,7 +168,7 @@ where
 
     fn call_end(
         &mut self,
-        context: &mut EvmContext<'_, DB>,
+        context: &mut EvmContext<'_, DatabaseError>,
         result: InterpreterResult,
     ) -> InterpreterResult {
         match result.result {
@@ -220,7 +219,7 @@ where
 
     fn create(
         &mut self,
-        context: &mut EvmContext<'_, DB>,
+        context: &mut EvmContext<'_, DatabaseError>,
         inputs: &mut CreateInputs,
     ) -> Option<(InterpreterResult, Option<Address>)> {
         self.validate_before_message();
@@ -241,7 +240,7 @@ where
 
     fn create_end(
         &mut self,
-        context: &mut EvmContext<'_, DB>,
+        context: &mut EvmContext<'_, DatabaseError>,
         result: InterpreterResult,
         address: Option<Address>,
     ) -> (InterpreterResult, Option<Address>) {
@@ -282,7 +281,7 @@ where
         (result, address)
     }
 
-    fn step(&mut self, interp: &mut Interpreter, context: &mut EvmContext<'_, DB>) {
+    fn step(&mut self, interp: &mut Interpreter, context: &mut EvmContext<'_, DatabaseError>) {
         // Skip the step
         let skip_step = self.pending_before.as_ref().map_or(false, |message| {
             message.code.is_some() && interp.current_opcode() == opcode::STOP

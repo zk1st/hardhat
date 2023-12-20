@@ -2,16 +2,14 @@ use std::{fmt::Debug, marker::PhantomData, ops::Range};
 
 use edr_eth::{Address, Bytes, B256, U256};
 use revm::{
-    db::WrapDatabaseRef,
-    interpreter::{
-        CallInputs, CreateInputs, Gas, InstructionResult, Interpreter, InterpreterResult,
-    },
-    Database, EvmContext, Inspector,
+    db::DatabaseComponentError,
+    interpreter::{CallInputs, CreateInputs, Interpreter, InterpreterResult},
+    EvmContext, Inspector,
 };
 
 use crate::{
+    evm::SyncInspector,
     trace::{Trace, TraceCollector},
-    SyncDatabase,
 };
 
 // TODO: Improve this design by introducing a InspectorMut trait
@@ -22,22 +20,20 @@ use crate::{
 /// inspector modifies state. The returned values are solely determined by the
 /// mutable inspector.
 #[derive(Debug)]
-pub struct DualInspector<A, B, DB>
+pub struct DualInspector<A, B, DatabaseErrorT>
 where
-    A: Inspector<DB>,
-    B: Inspector<DB>,
-    DB: Database,
+    A: Inspector<DatabaseErrorT>,
+    B: Inspector<DatabaseErrorT>,
 {
     immutable: A,
     mutable: B,
-    phantom: PhantomData<DB>,
+    phantom: PhantomData<DatabaseErrorT>,
 }
 
-impl<A, B, DB> DualInspector<A, B, DB>
+impl<A, B, DatabaseErrorT> DualInspector<A, B, DatabaseErrorT>
 where
-    A: Inspector<DB>,
-    B: Inspector<DB>,
-    DB: Database,
+    A: Inspector<DatabaseErrorT>,
+    B: Inspector<DatabaseErrorT>,
 {
     /// Constructs a `DualInspector` from the provided inspectors.
     pub fn new(immutable: A, mutable: B) -> Self {
@@ -54,25 +50,28 @@ where
     }
 }
 
-impl<A, B, DB> Inspector<DB> for DualInspector<A, B, DB>
+impl<A, B, DatabaseError> Inspector<DatabaseError> for DualInspector<A, B, DatabaseError>
 where
-    A: Inspector<DB>,
-    B: Inspector<DB>,
-    DB: Database,
+    A: Inspector<DatabaseError>,
+    B: Inspector<DatabaseError>,
 {
-    fn initialize_interp(&mut self, interp: &mut Interpreter, context: &mut EvmContext<'_, DB>) {
+    fn initialize_interp(
+        &mut self,
+        interp: &mut Interpreter,
+        context: &mut EvmContext<'_, DatabaseError>,
+    ) {
         self.immutable.initialize_interp(interp, context);
         self.mutable.initialize_interp(interp, context);
     }
 
-    fn step(&mut self, interp: &mut Interpreter, context: &mut EvmContext<'_, DB>) {
+    fn step(&mut self, interp: &mut Interpreter, context: &mut EvmContext<'_, DatabaseError>) {
         self.immutable.step(interp, context);
         self.mutable.step(interp, context);
     }
 
     fn log(
         &mut self,
-        context: &mut EvmContext<'_, DB>,
+        context: &mut EvmContext<'_, DatabaseError>,
         address: &Address,
         topics: &[B256],
         data: &Bytes,
@@ -81,14 +80,14 @@ where
         self.mutable.log(context, address, topics, data);
     }
 
-    fn step_end(&mut self, interp: &mut Interpreter, data: &mut EvmContext<'_, DB>) {
+    fn step_end(&mut self, interp: &mut Interpreter, data: &mut EvmContext<'_, DatabaseError>) {
         self.immutable.step_end(interp, data);
         self.mutable.step_end(interp, data);
     }
 
     fn call(
         &mut self,
-        data: &mut EvmContext<'_, DB>,
+        data: &mut EvmContext<'_, DatabaseError>,
         inputs: &mut CallInputs,
     ) -> Option<(InterpreterResult, Range<usize>)> {
         self.immutable.call(data, inputs);
@@ -97,7 +96,7 @@ where
 
     fn call_end(
         &mut self,
-        context: &mut EvmContext<'_, DB>,
+        context: &mut EvmContext<'_, DatabaseError>,
         result: InterpreterResult,
     ) -> InterpreterResult {
         self.immutable.call_end(context, result.clone());
@@ -106,7 +105,7 @@ where
 
     fn create(
         &mut self,
-        context: &mut EvmContext<'_, DB>,
+        context: &mut EvmContext<'_, DatabaseError>,
         inputs: &mut CreateInputs,
     ) -> Option<(InterpreterResult, Option<Address>)> {
         self.immutable.create(context, inputs);
@@ -115,7 +114,7 @@ where
 
     fn create_end(
         &mut self,
-        context: &mut EvmContext<'_, DB>,
+        context: &mut EvmContext<'_, DatabaseError>,
         result: InterpreterResult,
         address: Option<Address>,
     ) -> (InterpreterResult, Option<Address>) {
@@ -144,24 +143,12 @@ where
     Dual(
         DualInspector<
             TraceCollector,
-            &'inspector mut dyn Inspector<
-                WrapDatabaseRef<
-                    &'inspector SyncDatabase<'inspector, 'inspector, BlockchainErrorT, StateErrorT>,
-                >,
-            >,
-            WrapDatabaseRef<
-                &'inspector SyncDatabase<'inspector, 'inspector, BlockchainErrorT, StateErrorT>,
-            >,
+            &'inspector mut dyn SyncInspector<BlockchainErrorT, StateErrorT>,
+            DatabaseComponentError<StateErrorT, BlockchainErrorT>,
         >,
     ),
     /// Only an inspector.
-    Inspector(
-        &'inspector mut dyn Inspector<
-            WrapDatabaseRef<
-                &'inspector SyncDatabase<'inspector, 'inspector, BlockchainErrorT, StateErrorT>,
-            >,
-        >,
-    ),
+    Inspector(&'inspector mut dyn SyncInspector<BlockchainErrorT, StateErrorT>),
 }
 
 impl<'inspector, BlockchainErrorT, StateErrorT>
@@ -173,13 +160,7 @@ where
     /// Constructs a new instance.
     pub fn new(
         with_trace: bool,
-        tracer: Option<
-            &'inspector mut dyn Inspector<
-                WrapDatabaseRef<
-                    &'inspector SyncDatabase<'inspector, 'inspector, BlockchainErrorT, StateErrorT>,
-                >,
-            >,
-        >,
+        tracer: Option<&'inspector mut dyn SyncInspector<BlockchainErrorT, StateErrorT>>,
     ) -> Self {
         if with_trace {
             if let Some(tracer) = tracer {
@@ -197,13 +178,7 @@ where
     /// Returns the inspector, if it exists.
     pub fn as_dyn_inspector(
         &mut self,
-    ) -> Option<
-        &mut dyn Inspector<
-            WrapDatabaseRef<
-                &'inspector SyncDatabase<'inspector, 'inspector, BlockchainErrorT, StateErrorT>,
-            >,
-        >,
-    > {
+    ) -> Option<&mut dyn SyncInspector<BlockchainErrorT, StateErrorT>> {
         match self {
             InspectorContainer::None => None,
             InspectorContainer::Collector(c) => Some(c),

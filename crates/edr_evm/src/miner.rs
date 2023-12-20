@@ -13,6 +13,7 @@ use revm::{
 use crate::{
     block::BlockBuilderCreationError,
     blockchain::SyncBlockchain,
+    evm::SyncInspector,
     inspector::InspectorContainer,
     mempool::OrderedTransaction,
     state::{StateDiff, SyncState},
@@ -92,9 +93,7 @@ pub fn mine_block<BlockchainErrorT, StateErrorT>(
     reward: U256,
     base_fee: Option<U256>,
     prevrandao: Option<B256>,
-    inspector: Option<
-        &mut dyn Inspector<WrapDatabaseRef<&SyncDatabase<'_, '_, BlockchainErrorT, StateErrorT>>>,
-    >,
+    inspector: Option<&mut dyn SyncInspector<BlockchainErrorT, StateErrorT>>,
 ) -> Result<MineBlockResultAndState<StateErrorT>, MineBlockError<BlockchainErrorT, StateErrorT>>
 where
     BlockchainErrorT: Debug + Send,
