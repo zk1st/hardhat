@@ -1,13 +1,13 @@
-use std::fmt::Debug;
+use std::{fmt::Debug, ops::Range};
 
 use edr_eth::{Address, Bytes, U256};
 use revm::{
     interpreter::{
-        instruction_result::SuccessOrHalt, opcode, return_revert, CallInputs, CreateInputs, Gas,
-        InstructionResult, Interpreter,
+        opcode, return_revert, CallInputs, CreateInputs, Gas, InstructionResult, Interpreter,
+        InterpreterResult, SuccessOrHalt,
     },
     primitives::{Bytecode, ExecutionResult, Output},
-    Database, EVMData, Inspector,
+    Database, EvmContext, Inspector,
 };
 
 /// Stack tracing message
@@ -124,12 +124,12 @@ where
 {
     fn call(
         &mut self,
-        data: &mut EVMData<'_, DB>,
+        context: &mut EvmContext<'_, DB>,
         inputs: &mut CallInputs,
-    ) -> (InstructionResult, Gas, edr_eth::Bytes) {
+    ) -> Option<(InterpreterResult, Range<usize>)> {
         self.validate_before_message();
 
-        let code = data
+        let code = context
             .journaled_state
             .state
             .get(&inputs.contract)
@@ -138,23 +138,23 @@ where
                 if let Some(code) = account_info.code.take() {
                     code
                 } else {
-                    data.db.code_by_hash(account_info.code_hash).unwrap()
+                    context.db.code_by_hash(account_info.code_hash).unwrap()
                 }
             })
             .unwrap_or_else(|| {
-                data.db.basic(inputs.contract).unwrap().map_or(
+                context.db.basic(inputs.contract).unwrap().map_or(
                     // If an invalid contract address was provided, return empty code
                     Bytecode::new(),
                     |account_info| {
                         account_info.code.unwrap_or_else(|| {
-                            data.db.code_by_hash(account_info.code_hash).unwrap()
+                            context.db.code_by_hash(account_info.code_hash).unwrap()
                         })
                     },
                 )
             });
 
         self.pending_before = Some(BeforeMessage {
-            depth: data.journaled_state.depth,
+            depth: context.journaled_state.depth,
             caller: inputs.context.caller,
             to: Some(inputs.context.address),
             gas_limit: inputs.gas_limit,
@@ -164,70 +164,69 @@ where
             code: Some(code),
         });
 
-        (InstructionResult::Continue, Gas::new(0), Bytes::default())
+        None
     }
 
     fn call_end(
         &mut self,
-        data: &mut EVMData<'_, DB>,
-        _inputs: &CallInputs,
-        remaining_gas: Gas,
-        ret: InstructionResult,
-        out: Bytes,
-    ) -> (InstructionResult, Gas, Bytes) {
-        match ret {
+        context: &mut EvmContext<'_, DB>,
+        result: InterpreterResult,
+    ) -> InterpreterResult {
+        match result.result {
             return_revert!() if self.pending_before.is_some() => {
                 self.pending_before = None;
-                return (ret, remaining_gas, out);
+                return result;
             }
             _ => (),
         }
 
         self.validate_before_message();
 
-        let safe_ret = if ret == InstructionResult::CallTooDeep
-            || ret == InstructionResult::OutOfFund
-            || ret == InstructionResult::StateChangeDuringStaticCall
+        let safe_ret = if result.result == InstructionResult::CallTooDeep
+            || result.result == InstructionResult::OutOfFund
+            || result.result == InstructionResult::StateChangeDuringStaticCall
         {
             InstructionResult::Revert
         } else {
-            ret
+            result.result
         };
 
-        let result = match safe_ret.into() {
+        let execution_result = match safe_ret.into() {
             SuccessOrHalt::Success(reason) => ExecutionResult::Success {
                 reason,
-                gas_used: remaining_gas.spend(),
-                gas_refunded: remaining_gas.refunded() as u64,
-                logs: data.journaled_state.logs.clone(),
-                output: Output::Call(out.clone()),
+                gas_used: result.gas.spend(),
+                gas_refunded: result.gas.refunded() as u64,
+                logs: context.journaled_state.logs.clone(),
+                output: Output::Call(result.output.clone()),
             },
             SuccessOrHalt::Revert => ExecutionResult::Revert {
-                gas_used: remaining_gas.spend(),
-                output: out.clone(),
+                gas_used: result.gas.spend(),
+                output: result.output.clone(),
             },
             SuccessOrHalt::Halt(reason) => ExecutionResult::Halt {
                 reason,
-                gas_used: remaining_gas.limit(),
+                gas_used: result.gas.limit(),
             },
-            SuccessOrHalt::InternalContinue => panic!("Internal error: {safe_ret:?}"),
+            SuccessOrHalt::InternalCallOrCreate | SuccessOrHalt::InternalContinue => {
+                panic!("Internal error: {safe_ret:?}")
+            }
             SuccessOrHalt::FatalExternalError => panic!("Fatal external error"),
         };
 
-        self.trace.add_after(result);
+        self.trace.add_after(execution_result);
 
-        (ret, remaining_gas, out)
+        result
     }
 
     fn create(
         &mut self,
-        data: &mut EVMData<'_, DB>,
+        context: &mut EvmContext<'_, DB>,
         inputs: &mut CreateInputs,
-    ) -> (InstructionResult, Option<Address>, Gas, Bytes) {
+    ) -> Option<(InterpreterResult, Option<Address>)> {
         self.validate_before_message();
 
         self.pending_before = Some(BeforeMessage {
-            depth: data.journaled_state.depth,
+            depth: context.journaled_state.depth,
             caller: inputs.caller,
             to: None,
             gas_limit: inputs.gas_limit,
@@ -237,58 +236,53 @@ where
             code: None,
         });
 
-        (
-            InstructionResult::Continue,
-            None,
-            Gas::new(0),
-            Bytes::default(),
-        )
+        None
     }
 
     fn create_end(
         &mut self,
-        data: &mut EVMData<'_, DB>,
-        _inputs: &CreateInputs,
-        ret: InstructionResult,
+        context: &mut EvmContext<'_, DB>,
+        result: InterpreterResult,
         address: Option<Address>,
-        remaining_gas: Gas,
-        out: Bytes,
-    ) -> (InstructionResult, Option<Address>, Gas, Bytes) {
+    ) -> (InterpreterResult, Option<Address>) {
         self.validate_before_message();
 
-        let safe_ret =
-            if ret == InstructionResult::CallTooDeep || ret == InstructionResult::OutOfFund {
-                InstructionResult::Revert
-            } else {
-                ret
-            };
+        let safe_ret = if result.result == InstructionResult::CallTooDeep
+            || result.result == InstructionResult::OutOfFund
+        {
+            InstructionResult::Revert
+        } else {
+            result.result
+        };
 
-        let result = match safe_ret.into() {
+        let execution_result = match safe_ret.into() {
             SuccessOrHalt::Success(reason) => ExecutionResult::Success {
                 reason,
-                gas_used: remaining_gas.spend(),
-                gas_refunded: remaining_gas.refunded() as u64,
-                logs: data.journaled_state.logs.clone(),
-                output: Output::Create(out.clone(), address),
+                gas_used: result.gas.spend(),
+                gas_refunded: result.gas.refunded() as u64,
+                logs: context.journaled_state.logs.clone(),
+                output: Output::Create(result.output.clone(), address),
             },
             SuccessOrHalt::Revert => ExecutionResult::Revert {
-                gas_used: remaining_gas.spend(),
-                output: out.clone(),
+                gas_used: result.gas.spend(),
+                output: result.output.clone(),
             },
             SuccessOrHalt::Halt(reason) => ExecutionResult::Halt {
                 reason,
-                gas_used: remaining_gas.limit(),
+                gas_used: result.gas.limit(),
             },
-            SuccessOrHalt::InternalContinue => panic!("Internal error: {safe_ret:?}"),
+            SuccessOrHalt::InternalCallOrCreate | SuccessOrHalt::InternalContinue => {
+                panic!("Internal error: {safe_ret:?}")
+            }
             SuccessOrHalt::FatalExternalError => panic!("Fatal external error"),
         };
 
-        self.trace.add_after(result);
+        self.trace.add_after(execution_result);
 
-        (ret, address, remaining_gas, out)
+        (result, address)
     }
 
-    fn step(&mut self, interp: &mut Interpreter, data: &mut EVMData<'_, DB>) -> InstructionResult {
+    fn step(&mut self, interp: &mut Interpreter, context: &mut EvmContext<'_, DB>) {
         // Skip the step
         let skip_step = self.pending_before.as_ref().map_or(false, |message| {
             message.code.is_some() && interp.current_opcode() == opcode::STOP
@@ -298,13 +292,11 @@ where
 
         if !skip_step {
             self.trace.add_step(
-                data.journaled_state.depth(),
+                context.journaled_state.depth(),
                 interp.program_counter(),
                 interp.current_opcode(),
                 interp.stack.data().last().cloned(),
             );
         }
-
-        InstructionResult::Continue
     }
 }

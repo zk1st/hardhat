@@ -7,11 +7,11 @@
 
 pub use revm::{
     interpreter::{
-        instruction_result::SuccessOrHalt, opcode, return_revert, CallInputs, CreateInputs, Gas,
-        InstructionResult, Interpreter, OPCODE_JUMPMAP,
+        opcode, return_revert, CallInputs, CreateInputs, Gas, InstructionResult, Interpreter,
+        SuccessOrHalt, OPCODE_JUMPMAP,
     },
     primitives::*,
-    EVMData, Inspector,
+    EvmContext, Inspector,
 };
 
 pub use crate::{

@@ -4,7 +4,7 @@ version = "0.2.0-dev"
 edition = "2021"
 
 [dependencies]
-alloy-primitives = { version = "0.4", default-features = false, features = ["rand", "rlp"] }
+alloy-primitives = { version = "0.5", default-features = false, features = ["rand", "rlp"] }
 alloy-rlp = { version = "0.3", default-features = false, features = ["derive"] }
 futures = {version = "0.3.28", default-features = false}
 hash-db = { version = "0.15.2", default-features = false }

@@ -1,10 +1,12 @@
-use std::{fmt::Debug, marker::PhantomData};
+use std::{fmt::Debug, marker::PhantomData, ops::Range};
 
 use edr_eth::{Address, Bytes, B256, U256};
 use revm::{
     db::WrapDatabaseRef,
-    interpreter::{CallInputs, CreateInputs, Gas, InstructionResult, Interpreter},
-    Database, EVMData, Inspector,
+    interpreter::{
+        CallInputs, CreateInputs, Gas, InstructionResult, Interpreter, InterpreterResult,
+    },
+    Database, EvmContext, Inspector,
 };
 
 use crate::{
@@ -58,85 +60,68 @@ where
     B: Inspector<DB>,
     DB: Database,
 {
-    fn initialize_interp(
-        &mut self,
-        interp: &mut Interpreter,
-        data: &mut EVMData<'_, DB>,
-    ) -> InstructionResult {
-        self.immutable.initialize_interp(interp, data);
-        self.mutable.initialize_interp(interp, data)
+    fn initialize_interp(&mut self, interp: &mut Interpreter, context: &mut EvmContext<'_, DB>) {
+        self.immutable.initialize_interp(interp, context);
+        self.mutable.initialize_interp(interp, context);
     }
 
-    fn step(&mut self, interp: &mut Interpreter, data: &mut EVMData<'_, DB>) -> InstructionResult {
-        self.immutable.step(interp, data);
-        self.mutable.step(interp, data)
+    fn step(&mut self, interp: &mut Interpreter, context: &mut EvmContext<'_, DB>) {
+        self.immutable.step(interp, context);
+        self.mutable.step(interp, context);
     }
 
     fn log(
         &mut self,
-        evm_data: &mut EVMData<'_, DB>,
+        context: &mut EvmContext<'_, DB>,
         address: &Address,
         topics: &[B256],
         data: &Bytes,
     ) {
-        self.immutable.log(evm_data, address, topics, data);
-        self.mutable.log(evm_data, address, topics, data);
+        self.immutable.log(context, address, topics, data);
+        self.mutable.log(context, address, topics, data);
     }
 
-    fn step_end(
-        &mut self,
-        interp: &mut Interpreter,
-        data: &mut EVMData<'_, DB>,
-        eval: InstructionResult,
-    ) -> InstructionResult {
-        self.immutable.step_end(interp, data, eval);
-        self.mutable.step_end(interp, data, eval)
+    fn step_end(&mut self, interp: &mut Interpreter, data: &mut EvmContext<'_, DB>) {
+        self.immutable.step_end(interp, data);
+        self.mutable.step_end(interp, data);
     }
 
     fn call(
         &mut self,
-        data: &mut EVMData<'_, DB>,
+        data: &mut EvmContext<'_, DB>,
         inputs: &mut CallInputs,
-    ) -> (InstructionResult, Gas, Bytes) {
+    ) -> Option<(InterpreterResult, Range<usize>)> {
         self.immutable.call(data, inputs);
         self.mutable.call(data, inputs)
     }
 
     fn call_end(
         &mut self,
-        data: &mut EVMData<'_, DB>,
-        inputs: &CallInputs,
-        remaining_gas: Gas,
-        ret: InstructionResult,
-        out: Bytes,
-    ) -> (InstructionResult, Gas, Bytes) {
-        self.immutable
-            .call_end(data, inputs, remaining_gas, ret, out.clone());
-        self.mutable.call_end(data, inputs, remaining_gas, ret, out)
+        context: &mut EvmContext<'_, DB>,
+        result: InterpreterResult,
+    ) -> InterpreterResult {
+        self.immutable.call_end(context, result.clone());
+        self.mutable.call_end(context, result)
     }
 
     fn create(
         &mut self,
-        data: &mut EVMData<'_, DB>,
+        context: &mut EvmContext<'_, DB>,
         inputs: &mut CreateInputs,
-    ) -> (InstructionResult, Option<Address>, Gas, Bytes) {
-        self.immutable.create(data, inputs);
-        self.mutable.create(data, inputs)
+    ) -> Option<(InterpreterResult, Option<Address>)> {
+        self.immutable.create(context, inputs);
+        self.mutable.create(context, inputs)
     }
 
     fn create_end(
         &mut self,
-        data: &mut EVMData<'_, DB>,
-        inputs: &CreateInputs,
-        ret: InstructionResult,
+        context: &mut EvmContext<'_, DB>,
+        result: InterpreterResult,
         address: Option<Address>,
-        remaining_gas: Gas,
-        out: Bytes,
-    ) -> (InstructionResult, Option<Address>, Gas, Bytes) {
+    ) -> (InterpreterResult, Option<Address>) {
         self.immutable
-            .create_end(data, inputs, ret, address, remaining_gas, out.clone());
-        self.mutable
-            .create_end(data, inputs, ret, address, remaining_gas, out)
+            .create_end(context, result.clone(), address.clone());
+        self.mutable.create_end(context, result, address)
     }
 
     fn selfdestruct(&mut self, contract: Address, target: Address, value: U256) {

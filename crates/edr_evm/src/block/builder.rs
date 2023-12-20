@@ -49,9 +49,9 @@ pub enum BlockTransactionError<BE, SE> {
     #[error("Sender doesn't have enough funds to send tx. The max upfront cost is: {max_upfront_cost} and the sender's balance is: {sender_balance}.")]
     InsufficientFunds {
         /// The maximum upfront cost of the transaction
-        max_upfront_cost: U256,
+        max_upfront_cost: Box<U256>,
         /// The sender's balance
-        sender_balance: U256,
+        sender_balance: Box<U256>,
     },
     /// Corrupt transaction data
     #[error("Invalid transaction: {0:?}")]
@@ -71,7 +71,7 @@ where
             EVMError::Transaction(e) => match e {
                 InvalidTransaction::LackOfFundForMaxFee { fee, balance } => {
                     Self::InsufficientFunds {
-                        max_upfront_cost: U256::from(fee),
+                        max_upfront_cost: fee,
                         sender_balance: balance,
                     }
                 }
