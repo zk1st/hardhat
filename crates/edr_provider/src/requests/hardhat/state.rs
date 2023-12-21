@@ -25,7 +25,7 @@ pub fn handle_set_code(
     address: Address,
     code: Bytes,
 ) -> Result<bool, ProviderError> {
-    data.set_code(address, code.into())?;
+    data.set_code(address, code)?;
 
     Ok(true)
 }

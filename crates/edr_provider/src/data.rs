@@ -993,7 +993,7 @@ impl ProviderData {
 
     pub fn sign(&self, address: &Address, message: Bytes) -> Result<Signature, ProviderError> {
         match self.local_accounts.get(address) {
-            Some(secret_key) => Ok(Signature::new(&Bytes::from(message)[..], secret_key)?),
+            Some(secret_key) => Ok(Signature::new(&message[..], secret_key)?),
             None => Err(ProviderError::UnknownAddress { address: *address }),
         }
     }
