@@ -8,7 +8,6 @@ use edr_eth::{
     transaction::EthTransactionRequest,
     Address, Bytes, B256, U256, U64,
 };
-use revm_primitives::ruint::aliases::U64;
 
 use crate::requests::hardhat::rpc_types::{CompilerInput, CompilerOutput, ResetProviderConfig};
 
@@ -314,7 +313,7 @@ pub enum MethodInvocation {
     SetBalance(Address, U256),
     /// hardhat_setCode
     #[serde(rename = "hardhat_setCode")]
-    SetCode(Address, ZeroXPrefixedBytes),
+    SetCode(Address, Bytes),
     /// hardhat_setCoinbase
     #[serde(rename = "hardhat_setCoinbase", with = "edr_eth::serde::sequence")]
     SetCoinbase(Address),

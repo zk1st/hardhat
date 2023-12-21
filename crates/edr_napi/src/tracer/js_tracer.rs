@@ -1,12 +1,13 @@
 use std::{
     fmt::Debug,
+    ops::Range,
     sync::mpsc::{channel, Sender},
 };
 
 use edr_eth::Bytes;
 use edr_evm::{
-    return_revert, trace::BeforeMessage, Bytecode, CallInputs, EVMData, Gas, InstructionResult,
-    SuccessOrHalt,
+    return_revert, trace::BeforeMessage, Bytecode, CallInputs, EvmContext, InstructionResult,
+    InterpreterResult, SuccessOrHalt,
 };
 use napi::{Env, JsBufferValue, JsFunction, JsUndefined, NapiRaw, Status};
 use napi_derive::napi;
@@ -407,20 +408,20 @@ impl Debug for JsTracer {
     }
 }
 
-impl<E> edr_evm::Inspector<E> for JsTracer
+impl<DatabaseError> edr_evm::Inspector<DatabaseError> for JsTracer
 where
-    E: Debug,
+    DatabaseError: Debug,
 {
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
     fn call(
         &mut self,
-        data: &mut dyn EVMData<E>,
+        context: &mut EvmContext<'_, DatabaseError>,
         inputs: &mut CallInputs,
-    ) -> (InstructionResult, Gas, edr_eth::Bytes) {
+    ) -> Option<(InterpreterResult, Range<usize>)> {
         self.validate_before_message();
 
-        let code = data
-            .journaled_state()
+        let code = context
+            .journaled_state
             .state
             .get(&inputs.context.code_address)
             .cloned()
@@ -428,26 +429,23 @@ where
                 if let Some(code) = &account.info.code {
                     code.clone()
                 } else {
-                    data.database()
-                        .code_by_hash(account.info.code_hash)
-                        .unwrap()
+                    context.db.code_by_hash(account.info.code_hash).unwrap()
                 }
             })
             .unwrap_or_else(|| {
-                data.database()
+                context
+                    .db
                     .basic(inputs.context.code_address)
                     .unwrap()
                     .map_or(Bytecode::new(), |account_info| {
                         account_info.code.unwrap_or_else(|| {
-                            data.database()
-                                .code_by_hash(account_info.code_hash)
-                                .unwrap()
+                            context.db.code_by_hash(account_info.code_hash).unwrap()
                         })
                     })
             });
 
         self.pending_before = Some(BeforeMessage {
-            depth: data.journaled_state().depth,
+            depth: context.journaled_state.depth,
             caller: inputs.context.caller,
             to: Some(inputs.context.address),
             gas_limit: inputs.gas_limit,
@@ -457,61 +455,63 @@ where
             code: Some(code),
         });
 
-        (InstructionResult::Continue, Gas::new(0), Bytes::default())
+        None
     }
 
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
     fn call_end(
         &mut self,
-        data: &mut dyn EVMData<E>,
-        _inputs: &CallInputs,
-        remaining_gas: Gas,
-        ret: InstructionResult,
-        out: Bytes,
-    ) -> (InstructionResult, Gas, Bytes) {
-        match ret {
+        context: &mut EvmContext<'_, DatabaseError>,
+        result: InterpreterResult,
+    ) -> InterpreterResult {
+        match result.result {
             return_revert!() if self.pending_before.is_some() => {
                 self.pending_before = None;
-                return (ret, remaining_gas, out);
+                return result;
             }
             _ => (),
         }
 
         self.validate_before_message();
 
-        let safe_ret = if ret == InstructionResult::CallTooDeep
-            || ret == InstructionResult::OutOfFund
-            || ret == InstructionResult::StateChangeDuringStaticCall
+        let safe_ret = if result.result == InstructionResult::CallTooDeep
+            || result.result == InstructionResult::OutOfFund
+            || result.result == InstructionResult::StateChangeDuringStaticCall
         {
             InstructionResult::Revert
         } else {
-            ret
+            result.result
         };
 
-        let result = match safe_ret.into() {
+        let execution_result = match safe_ret.into() {
             SuccessOrHalt::Success(reason) => edr_evm::ExecutionResult::Success {
                 reason,
-                gas_used: remaining_gas.spend(),
-                gas_refunded: remaining_gas.refunded() as u64,
-                logs: data.journaled_state().logs.clone(),
-                output: edr_evm::Output::Call(out.clone()),
+                gas_used: result.gas.spend(),
+                gas_refunded: result.gas.refunded() as u64,
+                logs: context.journaled_state.logs.clone(),
+                output: edr_evm::Output::Call(result.output.clone()),
             },
             SuccessOrHalt::Revert => edr_evm::ExecutionResult::Revert {
-                gas_used: remaining_gas.spend(),
-                output: out.clone(),
+                gas_used: result.gas.spend(),
+                output: result.output.clone(),
             },
             SuccessOrHalt::Halt(reason) => edr_evm::ExecutionResult::Halt {
                 reason,
-                gas_used: remaining_gas.limit(),
+                gas_used: result.gas.limit(),
             },
-            SuccessOrHalt::InternalContinue => panic!("Internal error: {safe_ret:?}"),
+            SuccessOrHalt::InternalCallOrCreate | SuccessOrHalt::InternalContinue => {
+                panic!("Internal error: {safe_ret:?}")
+            }
             SuccessOrHalt::FatalExternalError => panic!("Fatal external error"),
         };
 
         let (sender, receiver) = channel();
 
         let status = self.after_call_fn.call(
-            AfterCallEvent { result, sender },
+            AfterCallEvent {
+                result: execution_result,
+                sender,
+            },
             ThreadsafeFunctionCallMode::Blocking,
         );
         assert_eq!(status, Status::Ok);
@@ -521,6 +521,6 @@ where
             .unwrap()
             .expect("Failed call to BeforeMessageHandler");
 
-        (ret, remaining_gas, out)
+        result
     }
 }

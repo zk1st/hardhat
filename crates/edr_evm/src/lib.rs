@@ -8,7 +8,7 @@
 pub use revm::{
     interpreter::{
         opcode, return_revert, CallInputs, CreateInputs, Gas, InstructionResult, Interpreter,
-        SuccessOrHalt, OPCODE_JUMPMAP,
+        InterpreterResult, SuccessOrHalt, OPCODE_JUMPMAP,
     },
     primitives::*,
     EvmContext, Inspector,
@@ -20,6 +20,7 @@ pub use crate::{
         debug_trace_transaction, execution_result_to_debug_result, DebugTraceConfig,
         DebugTraceLogItem, DebugTraceResult, TracerEip3155,
     },
+    evm::SyncInspector,
     inspector::*,
     mempool::{MemPool, MinerTransactionError, OrderedTransaction},
     miner::*,

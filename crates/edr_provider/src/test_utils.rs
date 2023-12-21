@@ -67,7 +67,7 @@ pub fn create_test_config_with_impersonated_accounts_and_fork(
         genesis_accounts,
         block_gas_limit: 30_000_000,
         chain_id: 123,
-        coinbase: Address::from_low_u64_ne(1),
+        coinbase: Address::random(),
         hardfork: SpecId::LATEST,
         initial_base_fee_per_gas: Some(U256::from(1000000000)),
         initial_blob_gas: Some(BlobGas {

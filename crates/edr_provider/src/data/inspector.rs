@@ -1,8 +1,8 @@
-use std::fmt::Debug;
+use std::{fmt::Debug, ops::Range};
 
 use dyn_clone::DynClone;
 use edr_eth::Bytes;
-use edr_evm::{CallInputs, EVMData, Gas, Inspector, InstructionResult};
+use edr_evm::{CallInputs, EvmContext, Inspector, InterpreterResult};
 
 use crate::data::CONSOLE_ADDRESS;
 
@@ -35,18 +35,14 @@ impl<'callbacks> EvmInspector<'callbacks> {
 impl<'callbacks, DatabaseErrorT> Inspector<DatabaseErrorT> for EvmInspector<'callbacks> {
     fn call(
         &mut self,
-        _data: &mut dyn EVMData<DatabaseErrorT>,
+        _context: &mut EvmContext<'_, DatabaseErrorT>,
         inputs: &mut CallInputs,
-    ) -> (InstructionResult, Gas, Bytes) {
+    ) -> Option<(InterpreterResult, Range<usize>)> {
         if inputs.contract == *CONSOLE_ADDRESS {
             self.callbacks.console(inputs.input.clone());
         }
 
-        (
-            InstructionResult::Continue,
-            Gas::new(inputs.gas_limit),
-            Bytes::new(),
-        )
+        None
     }
 }
 

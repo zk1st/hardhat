@@ -135,7 +135,7 @@ impl TryFrom<AccountOverrideOptions> for AccountOverride {
         Ok(Self {
             balance,
             nonce,
-            code: code.map(|bytes| Bytecode::new_raw(bytes.into())),
+            code: code.map(Bytecode::new_raw),
             storage,
         })
     }

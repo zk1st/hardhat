@@ -1,9 +1,5 @@
-<<<<<<< HEAD:crates/edr_eth/tests/integration_tests.rs
-use alloy_primitives::U160;
-=======
 mod common;
 
->>>>>>> origin/edr/main:crates/edr_provider/tests/eth_request_serialization.rs
 use edr_eth::{
     remote::{
         eth::{eip712, CallRequest, GetLogsInput},
@@ -16,7 +12,6 @@ use edr_eth::{
     Address, Bytes, HashMap, B256, U256, U64,
 };
 use edr_provider::{MethodInvocation, OneUsizeOrTwo, U64OrUsize};
-use revm_primitives::{Bytes, HashMap};
 
 use crate::common::{
     help_test_method_invocation_serde, help_test_method_invocation_serde_with_expected,
@@ -35,8 +30,8 @@ fn test_serde_eth_block_number() {
 #[test]
 fn test_serde_eth_call() {
     let tx = CallRequest {
-        from: Some(Address::from(U160::from(1))),
-        to: Some(Address::from(U160::from(2))),
+        from: Some(Address::random()),
+        to: Some(Address::random()),
         gas: Some(3),
         gas_price: Some(U256::from(4)),
         max_fee_per_gas: None,
@@ -69,8 +64,8 @@ fn test_serde_eth_coinbase() {
 #[test]
 fn test_serde_eth_estimate_gas() {
     let tx = CallRequest {
-        from: Some(Address::from(U160::from(1))),
-        to: Some(Address::from(U160::from(2))),
+        from: Some(Address::random()),
+        to: Some(Address::random()),
         gas: Some(3),
         gas_price: Some(U256::from(4)),
         max_fee_per_gas: None,
@@ -106,12 +101,12 @@ fn test_serde_eth_gas_price() {
 #[test]
 fn test_serde_eth_get_balance() {
     help_test_method_invocation_serde(MethodInvocation::GetBalance(
-        Address::from(U160::from(1)),
+        Address::random(),
         Some(BlockSpec::latest()),
     ));
     help_test_method_invocation_serde_with_expected(
-        MethodInvocation::GetBalance(Address::from(U160::from(1)), None),
-        MethodInvocation::GetBalance(Address::from(U160::from(1)), Some(BlockSpec::latest())),
+        MethodInvocation::GetBalance(Address::random(), None),
+        MethodInvocation::GetBalance(Address::random(), Some(BlockSpec::latest())),
     );
 }
 
@@ -142,15 +137,12 @@ fn test_serde_eth_get_block_by_hash() {
 #[test]
 fn test_serde_eth_get_transaction_count() {
     help_test_method_invocation_serde(MethodInvocation::GetTransactionCount(
-        Address::from(U160::from(1)),
+        Address::random(),
         Some(BlockSpec::latest()),
     ));
     help_test_method_invocation_serde_with_expected(
-        MethodInvocation::GetTransactionCount(Address::from(U160::from(1)), None),
-        MethodInvocation::GetTransactionCount(
-            Address::from(U160::from(1)),
-            Some(BlockSpec::latest()),
-        ),
+        MethodInvocation::GetTransactionCount(Address::random(), None),
+        MethodInvocation::GetTransactionCount(Address::random(), Some(BlockSpec::latest())),
     );
 }
 
@@ -171,12 +163,12 @@ fn test_serde_eth_get_transaction_count_by_number() {
 #[test]
 fn test_serde_eth_get_code() {
     help_test_method_invocation_serde(MethodInvocation::GetCode(
-        Address::from(U160::from(1)),
+        Address::random(),
         Some(BlockSpec::latest()),
     ));
     help_test_method_invocation_serde_with_expected(
-        MethodInvocation::GetCode(Address::from(U160::from(1)), None),
-        MethodInvocation::GetCode(Address::from(U160::from(1)), Some(BlockSpec::latest())),
+        MethodInvocation::GetCode(Address::random(), None),
+        MethodInvocation::GetCode(Address::random(), Some(BlockSpec::latest())),
     );
 }
 
@@ -193,7 +185,7 @@ fn test_serde_eth_get_filter_logs() {
 #[test]
 fn test_serde_eth_get_logs_by_block_numbers() {
     help_test_method_invocation_serde(MethodInvocation::GetLogs(GetLogsInput {
-        address: Address::from(U160::from(1)),
+        address: Address::random(),
         from_block: BlockSpec::Number(100),
         to_block: BlockSpec::Number(102),
     }));
@@ -202,7 +194,7 @@ fn test_serde_eth_get_logs_by_block_numbers() {
 #[test]
 fn test_serde_eth_get_logs_by_block_tags() {
     help_test_method_invocation_serde(MethodInvocation::GetLogs(GetLogsInput {
-        address: Address::from(U160::from(1)),
+        address: Address::random(),
         from_block: BlockSpec::Tag(BlockTag::Safe),
         to_block: BlockSpec::latest(),
     }));
@@ -211,17 +203,13 @@ fn test_serde_eth_get_logs_by_block_tags() {
 #[test]
 fn test_serde_eth_get_storage_at() {
     help_test_method_invocation_serde(MethodInvocation::GetStorageAt(
-        Address::from(U160::from(1)),
+        Address::random(),
         U256::ZERO,
         Some(BlockSpec::latest()),
     ));
     help_test_method_invocation_serde_with_expected(
-        MethodInvocation::GetStorageAt(Address::from(U160::from(1)), U256::ZERO, None),
-        MethodInvocation::GetStorageAt(
-            Address::from(U160::from(1)),
-            U256::ZERO,
-            Some(BlockSpec::latest()),
-        ),
+        MethodInvocation::GetStorageAt(Address::random(), U256::ZERO, None),
+        MethodInvocation::GetStorageAt(Address::random(), U256::ZERO, Some(BlockSpec::latest())),
     );
 }
 
@@ -251,7 +239,7 @@ fn test_serde_eth_get_tx_by_hash() {
 #[test]
 fn test_serde_eth_get_tx_count_by_block_number() {
     help_test_method_invocation_serde(MethodInvocation::GetTransactionCount(
-        Address::from(U160::from(1)),
+        Address::random(),
         Some(BlockSpec::Number(100)),
     ));
 }
@@ -259,7 +247,7 @@ fn test_serde_eth_get_tx_count_by_block_number() {
 #[test]
 fn test_serde_eth_get_tx_count_by_block_tag() {
     help_test_method_invocation_serde(MethodInvocation::GetTransactionCount(
-        Address::from(U160::from(1)),
+        Address::random(),
         Some(BlockSpec::latest()),
     ));
 }
@@ -288,7 +276,7 @@ fn test_serde_eth_new_filter() {
             from: Some(BlockSpec::Number(1000)),
             to: Some(BlockSpec::latest()),
         }),
-        addresses: Some(OneOrMoreAddresses::One(Address::from(U160::from(1)))),
+        addresses: Some(OneOrMoreAddresses::One(Address::random())),
         topics: Some(vec![B256::from(U256::from(1))]),
     }));
 }
@@ -313,8 +301,8 @@ fn test_serde_eth_send_raw_transaction() {
 #[test]
 fn test_serde_eth_send_transaction() {
     help_test_method_invocation_serde(MethodInvocation::SendTransaction(EthTransactionRequest {
-        from: Address::from(U160::from(1)),
-        to: Some(Address::from(U160::from(2))),
+        from: Address::random(),
+        to: Some(Address::random()),
         gas: Some(3_u64),
         gas_price: Some(U256::from(4)),
         max_fee_per_gas: None,
@@ -331,20 +319,15 @@ fn test_serde_eth_send_transaction() {
 #[test]
 fn test_serde_eth_sign() {
     help_test_method_invocation_serde(MethodInvocation::Sign(
-<<<<<<< HEAD:crates/edr_eth/tests/integration_tests.rs
-        Address::from(U160::from(1)),
         Bytes::from(&b"whatever"[..]),
-=======
-        Bytes::from(&b"whatever"[..]).into(),
-        Address::from_low_u64_ne(1),
->>>>>>> origin/edr/main:crates/edr_provider/tests/eth_request_serialization.rs
+        Address::random(),
     ));
 }
 
 #[test]
 fn test_serde_eth_sign_typed_data_v4() {
     help_test_method_invocation_serde(MethodInvocation::SignTypedDataV4(
-        Address::from(U160::from(1)),
+        Address::random(),
         eip712::Message {
             types: HashMap::from([(
                 String::from("typeA"),
@@ -359,7 +342,7 @@ fn test_serde_eth_sign_typed_data_v4() {
                 name: Some(String::from("my domain")),
                 version: Some(String::from("1.0.0")),
                 chain_id: Some(U256::from(1)),
-                verifying_contract: Some(Address::from(U160::from(1))),
+                verifying_contract: Some(Address::random()),
                 salt: Some(B256::from(U256::from(1))),
             },
         },
@@ -411,7 +394,7 @@ fn test_serde_log_output() {
         transaction_hash: Some(B256::from(U256::from(1))),
         block_hash: Some(B256::from(U256::from(2))),
         block_number: Some(U256::ZERO),
-        address: Address::from(U160::from(1)),
+        address: Address::random(),
         data: Bytes::from_static(b"whatever"),
         topics: vec![B256::from(U256::from(3)), B256::from(U256::from(3))],
     });
@@ -428,10 +411,10 @@ fn test_serde_filter_block_target() {
 
 #[test]
 fn test_serde_one_or_more_addresses() {
-    help_test_serde_value(OneOrMoreAddresses::One(Address::from(U160::from(1))));
+    help_test_serde_value(OneOrMoreAddresses::One(Address::random()));
     help_test_serde_value(OneOrMoreAddresses::Many(vec![
-        Address::from(U160::from(1)),
-        Address::from(U160::from(1)),
+        Address::random(),
+        Address::random(),
     ]));
 }
 
@@ -500,14 +483,7 @@ fn test_net_peer_count() {
 
 #[test]
 fn test_personal_sign() {
-<<<<<<< HEAD:crates/edr_eth/tests/integration_tests.rs
-    let call = MethodInvocation::Sign(Address::from(U160::from(1)), Bytes::from(&b"whatever"[..]));
-=======
-    let call = MethodInvocation::Sign(
-        Bytes::from(&b"whatever"[..]).into(),
-        Address::from_low_u64_ne(1),
-    );
->>>>>>> origin/edr/main:crates/edr_provider/tests/eth_request_serialization.rs
+    let call = MethodInvocation::Sign(Bytes::from(&b"whatever"[..]), Address::random());
 
     let serialized = serde_json::json!(call)
         .to_string()

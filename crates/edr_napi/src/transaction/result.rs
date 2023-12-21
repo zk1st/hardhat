@@ -103,7 +103,7 @@ pub enum ExceptionalHalt {
     /// Error on created contract that begins with EF
     CreateContractStartingWithEF,
     /// EIP-3860: Limit and meter initcode. Initcode size limit exceeded.
-    CreateInitcodeSizeLimit,
+    CreateInitCodeSizeLimit,
 }
 
 impl From<edr_evm::Halt> for ExceptionalHalt {
@@ -124,7 +124,7 @@ impl From<edr_evm::Halt> for ExceptionalHalt {
             edr_evm::Halt::CreateContractStartingWithEF => {
                 ExceptionalHalt::CreateContractStartingWithEF
             }
-            edr_evm::Halt::CreateInitcodeSizeLimit => ExceptionalHalt::CreateInitcodeSizeLimit,
+            edr_evm::Halt::CreateInitCodeSizeLimit => ExceptionalHalt::CreateInitCodeSizeLimit,
             edr_evm::Halt::OverflowPayment
             | edr_evm::Halt::StateChangeDuringStaticCall
             | edr_evm::Halt::CallNotAllowedInsideStatic
@@ -152,7 +152,7 @@ impl From<ExceptionalHalt> for edr_evm::Halt {
             ExceptionalHalt::NonceOverflow => Self::NonceOverflow,
             ExceptionalHalt::CreateContractSizeLimit => Self::CreateContractSizeLimit,
             ExceptionalHalt::CreateContractStartingWithEF => Self::CreateContractStartingWithEF,
-            ExceptionalHalt::CreateInitcodeSizeLimit => Self::CreateInitcodeSizeLimit,
+            ExceptionalHalt::CreateInitCodeSizeLimit => Self::CreateInitCodeSizeLimit,
         }
     }
 }
@@ -226,7 +226,7 @@ impl ExecutionResult {
                                     )
                                 }
                                 .map(JsBufferValue::into_raw)?,
-                                address: address.map(|address| Buffer::from(address.as_bytes())),
+                                address: address.map(|address| Buffer::from(address.as_slice())),
                             })
                         }
                     },

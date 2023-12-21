@@ -248,7 +248,7 @@ impl TracerEip3155 {
                 if let Some(JournalEntry::StorageChange { address, key, .. }) = last_entry {
                     let value = data.journaled_state.state[address].storage[key].present_value();
                     let contract_storage = self.storage.entry(self.contract_address).or_default();
-                    contract_storage.insert(u256_to_hex_word(&key), u256_to_hex_word(&value));
+                    contract_storage.insert(u256_to_hex_word(key), u256_to_hex_word(&value));
                 }
             }
             Some(
@@ -378,8 +378,7 @@ impl<DatabaseError> Inspector<DatabaseError> for TracerEip3155 {
         result: InterpreterResult,
         address: Option<Address>,
     ) -> (InterpreterResult, Option<Address>) {
-        self.gas_inspector
-            .create_end(data, result.clone(), address.clone());
+        self.gas_inspector.create_end(data, result.clone(), address);
         self.skip = true;
         (result, address)
     }

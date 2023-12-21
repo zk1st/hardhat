@@ -118,8 +118,7 @@ where
         result: InterpreterResult,
         address: Option<Address>,
     ) -> (InterpreterResult, Option<Address>) {
-        self.immutable
-            .create_end(context, result.clone(), address.clone());
+        self.immutable.create_end(context, result.clone(), address);
         self.mutable.create_end(context, result, address)
     }
 

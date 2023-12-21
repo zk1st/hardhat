@@ -45,13 +45,7 @@ fn serde_hardhat_compiler() {
 
 #[test]
 fn serde_hardhat_drop_transaction() {
-<<<<<<< HEAD:crates/edr_rpc_hardhat/tests/hardhat.rs
-    help_test_method_invocation_serde(edr_rpc_hardhat::Request::DropTransaction(B256::from(
-        U256::from(1),
-    )));
-=======
-    help_test_method_invocation_serde(MethodInvocation::DropTransaction(B256::from_low_u64_ne(1)));
->>>>>>> origin/edr/main:crates/edr_provider/tests/hardhat_request_serialization.rs
+    help_test_method_invocation_serde(MethodInvocation::DropTransaction(B256::random()));
 }
 
 #[test]
@@ -66,14 +60,7 @@ fn serde_hardhat_get_stack_trace_failures_count() {
 
 #[test]
 fn serde_hardhat_impersonate_account() {
-<<<<<<< HEAD:crates/edr_rpc_hardhat/tests/hardhat.rs
-    help_test_method_invocation_serde(edr_rpc_hardhat::Request::ImpersonateAccount(
-        Address::random(),
-=======
-    help_test_method_invocation_serde(MethodInvocation::ImpersonateAccount(
-        Address::from_low_u64_ne(1),
->>>>>>> origin/edr/main:crates/edr_provider/tests/hardhat_request_serialization.rs
-    ));
+    help_test_method_invocation_serde(MethodInvocation::ImpersonateAccount(Address::random()));
 }
 
 #[test]
@@ -112,38 +99,20 @@ fn serde_hardhat_reset() {
 
 #[test]
 fn serde_hardhat_set_balance() {
-<<<<<<< HEAD:crates/edr_rpc_hardhat/tests/hardhat.rs
-    help_test_method_invocation_serde(edr_rpc_hardhat::Request::SetBalance(
-        Address::random(),
-=======
-    help_test_method_invocation_serde(MethodInvocation::SetBalance(
-        Address::from_low_u64_ne(1),
->>>>>>> origin/edr/main:crates/edr_provider/tests/hardhat_request_serialization.rs
-        U256::ZERO,
-    ));
+    help_test_method_invocation_serde(MethodInvocation::SetBalance(Address::random(), U256::ZERO));
 }
 
 #[test]
 fn serde_hardhat_set_code() {
-<<<<<<< HEAD:crates/edr_rpc_hardhat/tests/hardhat.rs
-    help_test_method_invocation_serde(edr_rpc_hardhat::Request::SetCode(
+    help_test_method_invocation_serde(MethodInvocation::SetCode(
         Address::random(),
         Bytes::from(&b"whatever"[..]),
-=======
-    help_test_method_invocation_serde(MethodInvocation::SetCode(
-        Address::from_low_u64_ne(1),
-        Bytes::from(&b"whatever"[..]).into(),
->>>>>>> origin/edr/main:crates/edr_provider/tests/hardhat_request_serialization.rs
     ));
 }
 
 #[test]
 fn serde_hardhat_set_coinbase() {
-<<<<<<< HEAD:crates/edr_rpc_hardhat/tests/hardhat.rs
-    help_test_method_invocation_serde(edr_rpc_hardhat::Request::SetCoinbase(Address::random()));
-=======
-    help_test_method_invocation_serde(MethodInvocation::SetCoinbase(Address::from_low_u64_ne(1)));
->>>>>>> origin/edr/main:crates/edr_provider/tests/hardhat_request_serialization.rs
+    help_test_method_invocation_serde(MethodInvocation::SetCoinbase(Address::random()));
 }
 
 #[test]
@@ -163,14 +132,7 @@ fn serde_hardhat_set_next_block_base_fee_per_gas() {
 
 #[test]
 fn serde_hardhat_set_nonce() {
-<<<<<<< HEAD:crates/edr_rpc_hardhat/tests/hardhat.rs
-    help_test_method_invocation_serde(edr_rpc_hardhat::Request::SetNonce(Address::random(), 1u64));
-=======
-    help_test_method_invocation_serde(MethodInvocation::SetNonce(
-        Address::from_low_u64_ne(1),
-        1u64,
-    ));
->>>>>>> origin/edr/main:crates/edr_provider/tests/hardhat_request_serialization.rs
+    help_test_method_invocation_serde(MethodInvocation::SetNonce(Address::random(), 1u64));
 }
 
 #[test]
@@ -180,13 +142,8 @@ fn serde_hardhat_set_prev_randao() {
 
 #[test]
 fn serde_hardhat_set_storage_at() {
-<<<<<<< HEAD:crates/edr_rpc_hardhat/tests/hardhat.rs
-    help_test_method_invocation_serde(edr_rpc_hardhat::Request::SetStorageAt(
-        Address::random(),
-=======
     help_test_method_invocation_serde(MethodInvocation::SetStorageAt(
-        Address::from_low_u64_ne(1),
->>>>>>> origin/edr/main:crates/edr_provider/tests/hardhat_request_serialization.rs
+        Address::random(),
         U256::ZERO,
         U256::ZERO,
     ));
@@ -194,12 +151,7 @@ fn serde_hardhat_set_storage_at() {
 
 #[test]
 fn serde_hardhat_stop_impersonating_account() {
-<<<<<<< HEAD:crates/edr_rpc_hardhat/tests/hardhat.rs
-    help_test_method_invocation_serde(edr_rpc_hardhat::Request::StopImpersonatingAccount(
-        Address::random(),
-=======
-    help_test_method_invocation_serde(MethodInvocation::StopImpersonatingAccount(
-        Address::from_low_u64_ne(1),
->>>>>>> origin/edr/main:crates/edr_provider/tests/hardhat_request_serialization.rs
-    ));
+    help_test_method_invocation_serde(
+        MethodInvocation::StopImpersonatingAccount(Address::random()),
+    );
 }

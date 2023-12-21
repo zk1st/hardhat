@@ -179,10 +179,6 @@ impl TryFrom<ConfigOptions> for CfgEnv {
             .limit_contract_code_size
             .map(TryCast::<usize>::try_cast)
             .transpose()?;
-        let limit_initcode_size = value
-            .limit_initcode_size
-            .map(TryCast::<usize>::try_cast)
-            .transpose()?;
 
         let disable_block_gas_limit = value
             .disable_block_gas_limit
@@ -193,7 +189,8 @@ impl TryFrom<ConfigOptions> for CfgEnv {
         cfg.chain_id = chain_id;
         cfg.spec_id = spec_id;
         cfg.limit_contract_code_size = limit_contract_code_size;
-        cfg.limit_initcode_size = limit_initcode_size;
+        // Question(agost): Did this end up being needed?
+        // cfg.limit_initcode_size = limit_initcode_size;
         cfg.disable_block_gas_limit = disable_block_gas_limit;
         cfg.disable_eip3607 = disable_eip3607;
 
