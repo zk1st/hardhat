@@ -207,7 +207,16 @@ impl Signature {
             ECDSASignature::from_slice(&bytes).map_err(SignatureError::ECDSAError)?
         };
 
-        Ok((signature, recovery_id))
+        // Ethereum expects a normalized "low S" form of the signature, as described in
+        // [https://eips.ethereum.org/EIPS/eip-2]
+        if let Some(signature) = signature.normalize_s() {
+            let recovery_id =
+                RecoveryId::from_byte(recovery_id.to_byte() ^ 1).expect("Recovery id is valid");
+
+            Ok((signature, recovery_id))
+        } else {
+            Ok((signature, recovery_id))
+        }
     }
 
     /// Retrieve the recovery ID.

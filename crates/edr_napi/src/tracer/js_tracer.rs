@@ -420,6 +420,8 @@ where
     ) -> Option<(InterpreterResult, Range<usize>)> {
         self.validate_before_message();
 
+        // This needs to be split into two functions to avoid borrow checker issues
+        #[allow(clippy::map_unwrap_or)]
         let code = context
             .journaled_state
             .state

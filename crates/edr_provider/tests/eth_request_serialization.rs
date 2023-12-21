@@ -11,6 +11,7 @@ use edr_eth::{
     transaction::EthTransactionRequest,
     Address, Bytes, HashMap, B256, U256, U64,
 };
+use edr_evm::alloy_primitives::U160;
 use edr_provider::{MethodInvocation, OneUsizeOrTwo, U64OrUsize};
 
 use crate::common::{
@@ -105,8 +106,8 @@ fn test_serde_eth_get_balance() {
         Some(BlockSpec::latest()),
     ));
     help_test_method_invocation_serde_with_expected(
-        MethodInvocation::GetBalance(Address::random(), None),
-        MethodInvocation::GetBalance(Address::random(), Some(BlockSpec::latest())),
+        MethodInvocation::GetBalance(Address::from(U160::from(1)), None),
+        MethodInvocation::GetBalance(Address::from(U160::from(1)), Some(BlockSpec::latest())),
     );
 }
 
@@ -141,8 +142,11 @@ fn test_serde_eth_get_transaction_count() {
         Some(BlockSpec::latest()),
     ));
     help_test_method_invocation_serde_with_expected(
-        MethodInvocation::GetTransactionCount(Address::random(), None),
-        MethodInvocation::GetTransactionCount(Address::random(), Some(BlockSpec::latest())),
+        MethodInvocation::GetTransactionCount(Address::from(U160::from(1)), None),
+        MethodInvocation::GetTransactionCount(
+            Address::from(U160::from(1)),
+            Some(BlockSpec::latest()),
+        ),
     );
 }
 
@@ -163,12 +167,12 @@ fn test_serde_eth_get_transaction_count_by_number() {
 #[test]
 fn test_serde_eth_get_code() {
     help_test_method_invocation_serde(MethodInvocation::GetCode(
-        Address::random(),
+        Address::from(U160::from(1)),
         Some(BlockSpec::latest()),
     ));
     help_test_method_invocation_serde_with_expected(
-        MethodInvocation::GetCode(Address::random(), None),
-        MethodInvocation::GetCode(Address::random(), Some(BlockSpec::latest())),
+        MethodInvocation::GetCode(Address::from(U160::from(1)), None),
+        MethodInvocation::GetCode(Address::from(U160::from(1)), Some(BlockSpec::latest())),
     );
 }
 
@@ -185,7 +189,7 @@ fn test_serde_eth_get_filter_logs() {
 #[test]
 fn test_serde_eth_get_logs_by_block_numbers() {
     help_test_method_invocation_serde(MethodInvocation::GetLogs(GetLogsInput {
-        address: Address::random(),
+        address: Address::from(U160::from(1)),
         from_block: BlockSpec::Number(100),
         to_block: BlockSpec::Number(102),
     }));
@@ -194,7 +198,7 @@ fn test_serde_eth_get_logs_by_block_numbers() {
 #[test]
 fn test_serde_eth_get_logs_by_block_tags() {
     help_test_method_invocation_serde(MethodInvocation::GetLogs(GetLogsInput {
-        address: Address::random(),
+        address: Address::from(U160::from(1)),
         from_block: BlockSpec::Tag(BlockTag::Safe),
         to_block: BlockSpec::latest(),
     }));
@@ -203,13 +207,17 @@ fn test_serde_eth_get_logs_by_block_tags() {
 #[test]
 fn test_serde_eth_get_storage_at() {
     help_test_method_invocation_serde(MethodInvocation::GetStorageAt(
-        Address::random(),
+        Address::from(U160::from(1)),
         U256::ZERO,
         Some(BlockSpec::latest()),
     ));
     help_test_method_invocation_serde_with_expected(
-        MethodInvocation::GetStorageAt(Address::random(), U256::ZERO, None),
-        MethodInvocation::GetStorageAt(Address::random(), U256::ZERO, Some(BlockSpec::latest())),
+        MethodInvocation::GetStorageAt(Address::from(U160::from(1)), U256::ZERO, None),
+        MethodInvocation::GetStorageAt(
+            Address::from(U160::from(1)),
+            U256::ZERO,
+            Some(BlockSpec::latest()),
+        ),
     );
 }
 
