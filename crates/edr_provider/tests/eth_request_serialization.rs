@@ -1,17 +1,24 @@
+<<<<<<< HEAD:crates/edr_eth/tests/integration_tests.rs
 use alloy_primitives::U160;
+=======
+mod common;
+
+>>>>>>> origin/edr/main:crates/edr_provider/tests/eth_request_serialization.rs
 use edr_eth::{
     remote::{
-        eth::eip712,
+        eth::{eip712, CallRequest, GetLogsInput},
         filter::{
             FilterBlockTarget, FilterOptions, LogOutput, OneOrMoreAddresses, SubscriptionType,
         },
-        methods::{CallRequest, GetLogsInput, MethodInvocation, OneUsizeOrTwo, U64OrUsize},
         BlockSpec, BlockTag, PreEip1898BlockSpec,
     },
     transaction::EthTransactionRequest,
     Address, Bytes, HashMap, B256, U256, U64,
 };
-use edr_test_utils::{
+use edr_provider::{MethodInvocation, OneUsizeOrTwo, U64OrUsize};
+use revm_primitives::{Bytes, HashMap};
+
+use crate::common::{
     help_test_method_invocation_serde, help_test_method_invocation_serde_with_expected,
 };
 
@@ -324,8 +331,13 @@ fn test_serde_eth_send_transaction() {
 #[test]
 fn test_serde_eth_sign() {
     help_test_method_invocation_serde(MethodInvocation::Sign(
+<<<<<<< HEAD:crates/edr_eth/tests/integration_tests.rs
         Address::from(U160::from(1)),
         Bytes::from(&b"whatever"[..]),
+=======
+        Bytes::from(&b"whatever"[..]).into(),
+        Address::from_low_u64_ne(1),
+>>>>>>> origin/edr/main:crates/edr_provider/tests/eth_request_serialization.rs
     ));
 }
 
@@ -488,7 +500,14 @@ fn test_net_peer_count() {
 
 #[test]
 fn test_personal_sign() {
+<<<<<<< HEAD:crates/edr_eth/tests/integration_tests.rs
     let call = MethodInvocation::Sign(Address::from(U160::from(1)), Bytes::from(&b"whatever"[..]));
+=======
+    let call = MethodInvocation::Sign(
+        Bytes::from(&b"whatever"[..]).into(),
+        Address::from_low_u64_ne(1),
+    );
+>>>>>>> origin/edr/main:crates/edr_provider/tests/eth_request_serialization.rs
 
     let serialized = serde_json::json!(call)
         .to_string()

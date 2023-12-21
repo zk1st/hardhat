@@ -1,6 +1,9 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use edr_eth::{Address, Bytes, U256};
-use edr_evm::state::AccountModifierFn;
+use edr_evm::{
+    alloy_primitives::U160,
+    state::{AccountModifierFn, SyncState},
+};
 use revm::{
     db::StateRef,
     primitives::{AccountInfo, Bytecode},
@@ -15,11 +18,11 @@ fn bench_account_storage_root_account_doesnt_exist(c: &mut Criterion) {
         "StateDebug:storage_root nonexist acct",
         |state, number_of_accounts| {
             // ensure account won't exist
-            let address = Address::from_low_u64_ne(number_of_accounts + 1);
+            let address = Address::from(U160::from(number_of_accounts + 1));
             state.remove_account(address).unwrap();
         },
         |state, number_of_accounts| {
-            let address = Address::from_low_u64_ne(number_of_accounts + 1);
+            let address = Address::from(U160::from(number_of_accounts + 1));
             debug_assert!(state.basic(address).unwrap().is_none());
             let result = state.account_storage_root(&address);
             debug_assert!(result.is_ok());
@@ -34,7 +37,7 @@ fn bench_account_storage_root_account_exists(c: &mut Criterion) {
         "StateDebug:storage_root exist acct",
         state_prep_no_op,
         |state, number_of_accounts| {
-            let address = Address::from_low_u64_ne(number_of_accounts);
+            let address = Address::from(U160::from(number_of_accounts));
             debug_assert!(state.basic(address).unwrap().is_some());
             let result = state.account_storage_root(&address);
             debug_assert!(result.is_ok());
@@ -49,8 +52,8 @@ fn bench_insert_account_already_exists(c: &mut Criterion) {
         c,
         "StateDebug:ins exist acct",
         state_prep_no_op,
-        |state, number_of_accounts| {
-            let address = Address::from_low_u64_ne(number_of_accounts);
+        |state: &mut Box<dyn SyncState<edr_evm::state::StateError>>, number_of_accounts| {
+            let address = Address::from(U160::from(number_of_accounts));
             debug_assert!(state.basic(address).unwrap().is_some());
             let result = state.insert_account(address, AccountInfo::default());
             debug_assert!(result.is_ok());
@@ -65,11 +68,11 @@ fn bench_insert_account_doesnt_exist_without_code(c: &mut Criterion) {
         "StateDebug:ins nonexist acct w.out code",
         |state, number_of_accounts| {
             // ensure account won't exist
-            let address = Address::from_low_u64_ne(number_of_accounts + 1);
+            let address = Address::from(U160::from(number_of_accounts + 1));
             state.remove_account(address).unwrap();
         },
         |state, number_of_accounts| {
-            let address = Address::from_low_u64_ne(number_of_accounts + 1);
+            let address = Address::from(U160::from(number_of_accounts + 1));
             debug_assert!(state.basic(address).unwrap().is_none());
             let result = state.insert_account(address, AccountInfo::default());
             debug_assert!(result.is_ok());
@@ -84,14 +87,14 @@ fn bench_insert_account_doesnt_exist_with_code(c: &mut Criterion) {
         "StateDebug:ins nonexist acct w.code",
         |state, number_of_accounts| {
             // ensure account won't exist
-            let address = Address::from_low_u64_ne(number_of_accounts + 1);
+            let address = Address::from(U160::from(number_of_accounts + 1));
             state.remove_account(address).unwrap();
         },
         |state, number_of_accounts| {
-            let address = Address::from_low_u64_ne(number_of_accounts + 1);
+            let address = Address::from(U160::from(number_of_accounts + 1));
             debug_assert!(state.basic(address).unwrap().is_none());
 
-            let code = Bytecode::new_raw(Bytes::copy_from_slice(address.as_bytes()));
+            let code = Bytecode::new_raw(Bytes::copy_from_slice(address.as_slice()));
             let code_hash = code.hash_slow();
             let result = state.insert_account(
                 address,
@@ -113,11 +116,11 @@ fn bench_modify_account_doesnt_exist(c: &mut Criterion) {
         "StateDebug:mod nonexist acct no code chg",
         |state, number_of_accounts| {
             // ensure account won't exist
-            let address = Address::from_low_u64_ne(number_of_accounts + 1);
+            let address = Address::from(U160::from(number_of_accounts + 1));
             state.remove_account(address).unwrap();
         },
         |state, number_of_accounts| {
-            let address = Address::from_low_u64_ne(number_of_accounts + 1);
+            let address = Address::from(U160::from(number_of_accounts + 1));
             debug_assert!(state.basic(address).unwrap().is_none());
             let result = state.modify_account(
                 address,
@@ -139,7 +142,7 @@ fn bench_modify_account_exists_with_code_no_change(c: &mut Criterion) {
         "StateDebug:mod non-code change",
         state_prep_no_op,
         |state, number_of_accounts| {
-            let address = Address::from_low_u64_ne(number_of_accounts);
+            let address = Address::from(U160::from(number_of_accounts));
             debug_assert!(account_has_code(state, &address));
             let result = state.modify_account(
                 address,
@@ -161,8 +164,8 @@ fn bench_modify_account_exists_with_code_changed_to_empty(c: &mut Criterion) {
         "StateDebug:mod rm acct code",
         |state, number_of_accounts| {
             // ensure that the account really does exist and have code
-            let address = Address::from_low_u64_ne(number_of_accounts);
-            let code = Bytecode::new_raw(Bytes::copy_from_slice(address.as_bytes()));
+            let address = Address::from(U160::from(number_of_accounts));
+            let code = Bytecode::new_raw(Bytes::copy_from_slice(address.as_slice()));
             state
                 .insert_account(
                     address,
@@ -175,7 +178,7 @@ fn bench_modify_account_exists_with_code_changed_to_empty(c: &mut Criterion) {
                 .unwrap();
         },
         |state, number_of_accounts| {
-            let address = Address::from_low_u64_ne(number_of_accounts);
+            let address = Address::from(U160::from(number_of_accounts));
             debug_assert!(account_has_code(state, &address));
             let result = state.modify_account(
                 address,
@@ -196,13 +199,13 @@ fn bench_modify_account_exists_with_code_changed(c: &mut Criterion) {
         "StateDebug:mod replace acct code",
         state_prep_no_op,
         |state, number_of_accounts| {
-            let address = Address::from_low_u64_ne(number_of_accounts);
+            let address = Address::from(U160::from(number_of_accounts));
             debug_assert!(account_has_code(state, &address));
             let result = state.modify_account(
                 address,
                 AccountModifierFn::new(Box::new(move |_balance, _nonce, code| {
                     code.replace(Bytecode::new_raw(Bytes::copy_from_slice(
-                        Address::from_low_u64_ne(number_of_accounts + 1).as_bytes(),
+                        Address::from(U160::from(number_of_accounts + 1)).as_slice(),
                     )));
                 })),
                 &|| Ok(AccountInfo::default()),
@@ -218,7 +221,7 @@ fn bench_modify_account_exists_without_code_code_changed(c: &mut Criterion) {
         c,
         "StateDebug:mod add code to acct w none",
         |state, number_of_accounts| {
-            let address = Address::from_low_u64_ne(number_of_accounts);
+            let address = Address::from(U160::from(number_of_accounts));
             state
                 .modify_account(
                     address,
@@ -230,13 +233,13 @@ fn bench_modify_account_exists_without_code_code_changed(c: &mut Criterion) {
                 .unwrap();
         },
         |state, number_of_accounts| {
-            let address = Address::from_low_u64_ne(number_of_accounts);
+            let address = Address::from(U160::from(number_of_accounts));
             debug_assert!(!account_has_code(state, &address));
             let result = state.modify_account(
                 address,
                 AccountModifierFn::new(Box::new(move |_balance, _nonce, code| {
                     code.replace(Bytecode::new_raw(Bytes::copy_from_slice(
-                        Address::from_low_u64_ne(number_of_accounts + 1).as_bytes(),
+                        Address::from(U160::from(number_of_accounts + 1)).as_slice(),
                     )));
                 })),
                 &|| Ok(AccountInfo::default()),
@@ -252,7 +255,7 @@ fn bench_modify_account_exists_without_code_no_code_change(c: &mut Criterion) {
         c,
         "StateDebug:mod leave code unchanged",
         |state, number_of_accounts| {
-            let address = Address::from_low_u64_ne(number_of_accounts);
+            let address = Address::from(U160::from(number_of_accounts));
             state
                 .modify_account(
                     address,
@@ -264,7 +267,7 @@ fn bench_modify_account_exists_without_code_no_code_change(c: &mut Criterion) {
                 .unwrap();
         },
         |state, number_of_accounts| {
-            let address = Address::from_low_u64_ne(number_of_accounts);
+            let address = Address::from(U160::from(number_of_accounts));
             debug_assert!(!account_has_code(state, &address));
             let result = state.modify_account(
                 address,
@@ -286,8 +289,8 @@ fn bench_remove_account_with_code(c: &mut Criterion) {
         "StateDebug:rm exist acct w.code",
         |state, number_of_accounts| {
             // ensure that the account really does exist and have code
-            let address = Address::from_low_u64_ne(number_of_accounts);
-            let code = Bytecode::new_raw(Bytes::copy_from_slice(address.as_bytes()));
+            let address = Address::from(U160::from(number_of_accounts));
+            let code = Bytecode::new_raw(Bytes::copy_from_slice(address.as_slice()));
             state
                 .insert_account(
                     address,
@@ -300,7 +303,7 @@ fn bench_remove_account_with_code(c: &mut Criterion) {
                 .unwrap();
         },
         |state, number_of_accounts| {
-            let address = Address::from_low_u64_ne(number_of_accounts);
+            let address = Address::from(U160::from(number_of_accounts));
             debug_assert!(account_has_code(state, &address));
             let result = state.remove_account(address);
             debug_assert!(result.is_ok());
@@ -315,7 +318,7 @@ fn bench_remove_account_without_code(c: &mut Criterion) {
         c,
         "StateDebug:rm exist acct w.out code",
         |state, number_of_accounts| {
-            let address = Address::from_low_u64_ne(number_of_accounts);
+            let address = Address::from(U160::from(number_of_accounts));
             state
                 .modify_account(
                     address,
@@ -327,7 +330,7 @@ fn bench_remove_account_without_code(c: &mut Criterion) {
                 .unwrap();
         },
         |state, number_of_accounts| {
-            let address = Address::from_low_u64_ne(number_of_accounts);
+            let address = Address::from(U160::from(number_of_accounts));
             debug_assert!(!account_has_code(state, &address));
             let result = state.remove_account(address);
             debug_assert!(result.is_ok());
@@ -343,11 +346,11 @@ fn bench_set_account_storage_slot_account_doesnt_exist(c: &mut Criterion) {
         "StateDebug:set_storage nonexist acct",
         |state, number_of_accounts| {
             // ensure account won't exist
-            let address = Address::from_low_u64_ne(number_of_accounts + 1);
+            let address = Address::from(U160::from(number_of_accounts + 1));
             state.remove_account(address).unwrap();
         },
         |state, number_of_accounts| {
-            let address = Address::from_low_u64_ne(number_of_accounts + 1);
+            let address = Address::from(U160::from(number_of_accounts + 1));
             debug_assert!(state.basic(address).unwrap().is_none());
             let result = state.set_account_storage_slot(address, U256::from(1), U256::from(1));
             debug_assert!(result.is_ok());
@@ -362,7 +365,7 @@ fn bench_set_account_storage_slot_account_exists(c: &mut Criterion) {
         "StateDebug:set_storage exist acct",
         state_prep_no_op,
         |state, number_of_accounts| {
-            let address = Address::from_low_u64_ne(number_of_accounts);
+            let address = Address::from(U160::from(number_of_accounts));
             debug_assert!(state.basic(address).unwrap().is_some());
             let result = state.set_account_storage_slot(address, U256::from(1), U256::from(1));
             debug_assert!(result.is_ok());

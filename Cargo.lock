@@ -988,7 +988,7 @@ dependencies = [
  "reqwest",
  "reqwest-middleware",
  "reqwest-retry",
- "revm-primitives",
+ "revm-primitives 1.3.0",
  "serde",
  "serde_json",
  "serial_test",
@@ -1041,7 +1041,6 @@ dependencies = [
  "edr_eth",
  "edr_evm",
  "edr_provider",
- "edr_rpc_hardhat",
  "k256",
  "napi",
  "napi-build",
@@ -1064,7 +1063,6 @@ dependencies = [
  "dyn-clone",
  "edr_eth",
  "edr_evm",
- "edr_rpc_hardhat",
  "edr_test_utils",
  "indexmap 2.0.2",
  "k256",
@@ -1072,6 +1070,7 @@ dependencies = [
  "log",
  "parking_lot 0.12.1",
  "rand",
+ "revm-primitives 1.1.2",
  "rlp",
  "serde",
  "serde_json",
@@ -1080,18 +1079,6 @@ dependencies = [
  "thiserror",
  "tokio",
  "toml 0.5.11",
-]
-
-[[package]]
-name = "edr_rpc_hardhat"
-version = "0.2.0-dev"
-dependencies = [
- "anyhow",
- "edr_eth",
- "edr_test_utils",
- "serde",
- "serde_json",
- "tempfile",
 ]
 
 [[package]]
@@ -2616,7 +2603,7 @@ dependencies = [
 name = "revm-interpreter"
 version = "1.3.0"
 dependencies = [
- "revm-primitives",
+ "revm-primitives 1.3.0",
  "serde",
 ]
 
@@ -2628,11 +2615,33 @@ dependencies = [
  "c-kzg",
  "k256",
  "once_cell",
- "revm-primitives",
+ "revm-primitives 1.3.0",
  "ripemd",
  "secp256k1",
  "sha2",
  "substrate-bn",
+]
+
+[[package]]
+name = "revm-primitives"
+version = "1.1.2"
+source = "git+https://github.com/Wodann/revm?rev=93d8ebe#93d8ebe6b41397186ecb2f5aee157f8948dfae9f"
+dependencies = [
+ "auto_impl",
+ "bitflags 2.4.1",
+ "bitvec",
+ "bytes",
+ "derive_more",
+ "enumn",
+ "fixed-hash",
+ "hashbrown 0.14.1",
+ "hex",
+ "hex-literal",
+ "once_cell",
+ "primitive-types",
+ "rlp",
+ "ruint",
+ "sha3",
 ]
 
 [[package]]

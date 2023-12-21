@@ -1,13 +1,13 @@
 use std::{collections::HashMap, fmt::Debug, ops::Range};
 
-use edr_eth::{signature::SignatureError, B256};
+use edr_eth::{signature::SignatureError, utils::u256_to_hex_word, B256};
 use revm::{
     inspectors::GasInspector,
     interpreter::{opcode, CallInputs, CreateInputs, Interpreter, InterpreterResult},
     primitives::{
         hex, Address, BlockEnv, Bytes, CfgEnv, ExecutionResult, ResultAndState, SpecId, U256,
     },
-    Database, EvmContext, Inspector, JournalEntry,
+    EvmContext, Inspector, JournalEntry,
 };
 
 use crate::{
@@ -226,7 +226,12 @@ impl TracerEip3155 {
         let stack = if self.config.disable_stack {
             None
         } else {
-            Some(self.stack.iter().map(to_hex_word).collect::<Vec<String>>())
+            Some(
+                self.stack
+                    .iter()
+                    .map(u256_to_hex_word)
+                    .collect::<Vec<String>>(),
+            )
         };
 
         let memory = if self.config.disable_memory {
@@ -243,7 +248,7 @@ impl TracerEip3155 {
                 if let Some(JournalEntry::StorageChange { address, key, .. }) = last_entry {
                     let value = data.journaled_state.state[address].storage[key].present_value();
                     let contract_storage = self.storage.entry(self.contract_address).or_default();
-                    contract_storage.insert(to_hex_word(&key), to_hex_word(&value));
+                    contract_storage.insert(u256_to_hex_word(&key), u256_to_hex_word(&value));
                 }
             }
             Some(
@@ -377,32 +382,5 @@ impl<DatabaseError> Inspector<DatabaseError> for TracerEip3155 {
             .create_end(data, result.clone(), address.clone());
         self.skip = true;
         (result, address)
-    }
-}
-
-fn to_hex_word(word: &U256) -> String {
-    if word == &U256::ZERO {
-        // For 0 zero, the #066x formatter doesn't add padding.
-        format!("0x{}", "0".repeat(64))
-    } else {
-        // 66 = 64 hex chars + 0x prefix
-        format!("{word:#066x}")
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_to_hex_word() {
-        assert_eq!(
-            to_hex_word(&U256::ZERO),
-            "0x0000000000000000000000000000000000000000000000000000000000000000"
-        );
-        assert_eq!(
-            to_hex_word(&U256::from(1)),
-            "0x0000000000000000000000000000000000000000000000000000000000000001"
-        );
     }
 }

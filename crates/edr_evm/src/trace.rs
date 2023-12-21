@@ -7,7 +7,7 @@ use revm::{
         InterpreterResult, SuccessOrHalt,
     },
     primitives::{Bytecode, ExecutionResult, Output},
-    Database, EvmContext, Inspector,
+    EvmContext, Inspector,
 };
 
 /// Stack tracing message

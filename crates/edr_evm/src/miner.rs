@@ -4,11 +4,7 @@ use edr_eth::{
     block::{BlockOptions, Header},
     Address, B256, B64, U256,
 };
-use revm::{
-    db::WrapDatabaseRef,
-    primitives::{CfgEnv, ExecutionResult, InvalidTransaction, SpecId},
-    Inspector,
-};
+use revm::primitives::{CfgEnv, ExecutionResult, InvalidTransaction, SpecId};
 
 use crate::{
     block::BlockBuilderCreationError,
@@ -19,7 +15,7 @@ use crate::{
     state::{StateDiff, SyncState},
     trace::Trace,
     BlockBuilder, BlockTransactionError, BuildBlockResult, LocalBlock, MemPool, PendingTransaction,
-    SyncBlock, SyncDatabase,
+    SyncBlock,
 };
 
 /// The result of mining a block, after having been committed to the blockchain.

@@ -41,13 +41,17 @@ use indexmap::IndexMap;
 use inspector::EvmInspector;
 pub use inspector::{InspectorCallbacks, SyncInspectorCallbacks};
 use lazy_static::lazy_static;
-use rpc_hardhat::{config::ForkConfig, ForkMetadata};
 use tokio::runtime;
 
 use self::account::{create_accounts, InitialAccounts};
 use crate::{
-    error::TransactionFailure, filter::Filter, logger::Logger, pending::BlockchainWithPending,
-    snapshot::Snapshot, ProviderConfig, ProviderError,
+    error::TransactionFailure,
+    filter::Filter,
+    logger::Logger,
+    pending::BlockchainWithPending,
+    requests::hardhat::rpc_types::{ForkConfig, ForkMetadata},
+    snapshot::Snapshot,
+    ProviderConfig, ProviderError,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -358,9 +362,12 @@ impl ProviderData {
             let code = state
                 .basic(address)?
                 .map_or(Ok(Bytes::new()), |account_info| {
-                    state
-                        .code_by_hash(account_info.code_hash)
-                        .map(|bytecode| bytecode.bytecode)
+                    state.code_by_hash(account_info.code_hash).map(|bytecode| {
+                        // The `Bytecode` REVM struct pad the bytecode with 33 bytes of 0s for the
+                        // `Checked` and `Analysed` variants. `Bytecode::original_bytes` returns
+                        // unpadded version.
+                        bytecode.original_bytes()
+                    })
                 })?;
 
             Ok(code)
