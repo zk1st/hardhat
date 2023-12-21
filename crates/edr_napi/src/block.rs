@@ -148,10 +148,7 @@ impl TryFrom<BlockOptions> for edr_eth::block::BlockOptions {
                 .extra_data
                 .map(|extra_data| Bytes::copy_from_slice(&extra_data)),
             mix_hash: value.mix_hash.map(TryCast::<B256>::try_cast).transpose()?,
-            nonce: value
-                .nonce
-                .map(|nonce| TryCast::<B64>::try_cast(nonce))
-                .transpose()?,
+            nonce: value.nonce.map(TryCast::<B64>::try_cast).transpose()?,
             base_fee: value
                 .base_fee
                 .map_or(Ok(None), |basefee| basefee.try_cast().map(Some))?,

@@ -350,11 +350,10 @@ impl From<Eip4844SignedTransaction> for SignedTransaction {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::OnceLock;
+    use std::{str::FromStr, sync::OnceLock};
 
     use super::*;
     use crate::Bytes;
-
     #[test]
     fn can_recover_sender() {
         let bytes = hex::decode("f85f800182520894095e7baea6a6c7c4c2dfeb977efac326af552d870a801ba048b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353a0efffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804").unwrap();
@@ -365,26 +364,36 @@ mod tests {
             SignedTransaction::PreEip155Legacy(tx) => tx,
             _ => panic!("Invalid typed transaction"),
         };
-        assert_eq!(tx.input, Bytes::new());
+        assert_eq!(tx.nonce, 0x00u64);
         assert_eq!(tx.gas_price, U256::from(0x01u64));
         assert_eq!(tx.gas_limit, 0x5208u64);
-        assert_eq!(tx.nonce, 0x00u64);
         if let TransactionKind::Call(ref to) = tx.kind {
             assert_eq!(
                 *to,
-                "0x095e7baea6a6c7c4c2dfeb977efac326af552d87"
-                    .parse::<Address>()
-                    .unwrap()
+                Address::from_str("0x095e7baea6a6c7c4c2dfeb977efac326af552d87").unwrap()
             );
         } else {
             panic!();
         }
         assert_eq!(tx.value, U256::from(0x0au64));
+        assert_eq!(tx.input, Bytes::new());
+        assert_eq!(
+            tx.signature,
+            Signature {
+                r: U256::from_str(
+                    "0x48b55bfa915ac795c431978d8a6a992b628d557da5ff759b307d495a36649353",
+                )
+                .unwrap(),
+                s: U256::from_str(
+                    "0xefffd310ac743f371de3b9f7f9cb56c0b28ad43601b4ab949f53faa07bd2c804",
+                )
+                .unwrap(),
+                v: 27
+            }
+        );
         assert_eq!(
             tx.recover().unwrap(),
-            "0x0f65fe9276bc9a24ae7083ae28e2660ef72df99e"
-                .parse::<Address>()
-                .unwrap()
+            Address::from_str("0x0f65fe9276bc9a24ae7083ae28e2660ef72df99e").unwrap()
         );
     }
 
