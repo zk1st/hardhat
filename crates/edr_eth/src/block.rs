@@ -130,7 +130,7 @@ pub struct Header {
     /// The block's mix hash
     pub mix_hash: B256,
     /// The block's nonce
-    #[cfg_attr(feature = "serde", serde(with = "B64Def"))]
+    #[cfg_attr(feature = "serde", serde(with = "crate::serde::B64Def"))]
     pub nonce: B64,
     /// BaseFee was added by EIP-1559 and is ignored in legacy headers.
     pub base_fee_per_gas: Option<U256>,
@@ -142,18 +142,6 @@ pub struct Header {
     /// The hash tree root of the parent beacon block for the given execution
     /// block (EIP-4788).
     pub parent_beacon_block_root: Option<B256>,
-}
-
-#[derive(serde::Serialize, serde::Deserialize)]
-#[serde(remote = "B64")]
-#[cfg(feature = "serde")]
-struct B64Def(#[serde(getter = "B64::as_uint")] revm_primitives::ruint::aliases::U64);
-
-#[cfg(feature = "serde")]
-impl From<B64Def> for B64 {
-    fn from(def: B64Def) -> Self {
-        def.0.into()
-    }
 }
 
 /// Information about the blob gas used in a block.

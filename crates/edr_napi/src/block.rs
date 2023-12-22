@@ -149,7 +149,7 @@ impl TryFrom<BlockOptions> for edr_eth::block::BlockOptions {
                 .map(|extra_data| Bytes::copy_from_slice(&extra_data)),
             mix_hash: value.mix_hash.map(TryCast::<B256>::try_cast).transpose()?,
             nonce: value.nonce.map_or(Ok(None), |nonce| {
-                B64::try_from_le_slice(&nonce)
+                B64::try_from_be_slice(&nonce)
                     .ok_or_else(|| {
                         napi::Error::new(
                             Status::InvalidArg,
@@ -253,7 +253,7 @@ impl BlockHeader {
             timestamp: BigInt::from(header.timestamp),
             extra_data,
             mix_hash: Buffer::from(header.mix_hash.as_bytes()),
-            nonce: Buffer::from(header.nonce.as_le_bytes().as_ref()),
+            nonce: Buffer::from(header.nonce.to_be_bytes_vec()),
             base_fee_per_gas: header.base_fee_per_gas.map(|fee| BigInt {
                 sign_bit: false,
                 words: fee.as_limbs().to_vec(),
@@ -293,7 +293,7 @@ impl TryFrom<BlockHeader> for edr_eth::block::Header {
             timestamp: value.timestamp.try_cast()?,
             extra_data: Bytes::copy_from_slice(value.extra_data.into_value()?.as_ref()),
             mix_hash: TryCast::<B256>::try_cast(value.mix_hash)?,
-            nonce: B64::try_from_le_slice(&value.nonce).ok_or_else(|| {
+            nonce: B64::try_from_be_slice(&value.nonce).ok_or_else(|| {
                 napi::Error::new(
                     Status::InvalidArg,
                     "Expected nonce to contain no more than 8 bytes",

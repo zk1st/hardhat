@@ -7,6 +7,8 @@ use serde::{
     de::DeserializeOwned, ser::SerializeSeq, Deserialize, Deserializer, Serialize, Serializer,
 };
 
+use crate::B64;
+
 /// Type for specifying a byte string that will have a 0x prefix when serialized
 /// and deserialized
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -304,6 +306,44 @@ pub mod u8 {
         SerializerT: Serializer,
     {
         Serialize::serialize(&U8::from(*value), s)
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(remote = "B64")]
+pub(crate) struct B64Def(#[serde(getter = "B64::as_uint")] revm_primitives::ruint::aliases::U64);
+
+impl From<B64Def> for B64 {
+    fn from(value: B64Def) -> Self {
+        value.0.into()
+    }
+}
+
+/// Helper module for (de)serializing an [`Option<B64>`] as uint.
+pub mod optional_b64_as_uint {
+    use super::{Deserialize, Deserializer, Serialize, Serializer};
+    use crate::{B64, U64};
+
+    /// Helper module for deserializing an [`Option<B64>`] as uint.
+    pub fn deserialize<'de, DeserializerT>(
+        deserializer: DeserializerT,
+    ) -> Result<Option<B64>, DeserializerT::Error>
+    where
+        DeserializerT: Deserializer<'de>,
+    {
+        let value: Option<U64> = Deserialize::deserialize(deserializer)?;
+        Ok(value.map(B64::from))
+    }
+
+    /// Helper module for serializing an [`Option<B64>`] as uint.
+    pub fn serialize<SerializerT>(
+        value: &Option<B64>,
+        s: SerializerT,
+    ) -> Result<SerializerT::Ok, SerializerT::Error>
+    where
+        SerializerT: Serializer,
+    {
+        Serialize::serialize(&value.map(|v| *v.as_uint()), s)
     }
 }
 

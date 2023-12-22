@@ -335,6 +335,7 @@ pub struct Block<TX> {
     /// mix hash
     pub mix_hash: B256,
     /// hash of the generated proof-of-work. null when its pending block.
+    #[cfg_attr(feature = "serde", serde(with = "crate::serde::optional_b64_as_uint"))]
     pub nonce: Option<B64>,
     /// base fee per gas
     pub base_fee_per_gas: Option<U256>,
