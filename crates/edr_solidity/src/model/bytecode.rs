@@ -1,8 +1,9 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use super::{
     opcode::{decode_opcode, Opcode},
     source_map::SourceMap,
+    Contract,
 };
 
 #[derive(Debug)]
@@ -19,7 +20,7 @@ pub struct ImmutableReference {
 
 #[derive(Debug)]
 pub struct Bytecode {
-    pub contract_id: usize,
+    pub contract: Arc<Contract>,
     pub bytecode_type: BytecodeType,
     pub nodermalized_code: Vec<u8>,
     pub library_offsets: Vec<usize>,

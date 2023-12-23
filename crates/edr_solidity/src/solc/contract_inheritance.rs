@@ -1,10 +1,7 @@
 use std::collections::{HashMap, VecDeque};
 
 use super::model_builder::{BuilderState, ModelBuilderError};
-use crate::model::{
-    contract::Contract,
-    function::{ContractFunction, Function},
-};
+use crate::model::Contract;
 
 #[derive(Default)]
 struct Flattened {
@@ -37,7 +34,10 @@ fn build_basic_flattened(
                     _ => {}
                 },
                 _ => {
-                    unreachable!("Only contract functions should be in the local function ids")
+                    unreachable!(
+                        "Only contract functions should be in the
+local function ids"
+                    )
                 }
             }
 

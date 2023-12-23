@@ -1,23 +1,16 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use thiserror::Error;
 
 use super::{
     ast::{self, ContractDefinition, FunctionDefinition, TopLevelNode},
-    contract_inheritance::flatten_contract_inheritance,
     public_functions_map::PublicFunctionsMap,
     standard_json::{CompilerInput, CompilerOutput, CompilerOutputSource},
     utils::{contract_kind_to_contract_type, parse_ast_src_location},
 };
 use crate::model::{
-    codebase::Codebase,
-    contract::Contract,
-    custom_error::CustomError,
-    function::{
-        AnonymousContractFunction, ContractFunction, FreeFunction, Function,
-        InternalContractFunction, PublicContractFunction,
-    },
-    source_file::SourceFile,
+    AnonymousContractFunction, Codebase, Contract, ContractFunction, ContractType, Function,
+    InternalContractFunction, SourceFile, SourceLocation,
 };
 
 #[derive(Error, Debug)]
@@ -38,12 +31,23 @@ pub enum ModelBuilderError {
     BaseContractFunctionNotFound(u32),
 }
 
+#[derive(Debug)]
+pub(crate) struct ContractData {
+    pub name: String,
+    pub contract_type: ContractType,
+    pub location: SourceLocation,
+    pub linearized_base_contract_ids: Vec<u32>,
+    pub local_function_ids: Vec<u32>,
+}
+
 #[derive(Default, Debug)]
 pub(crate) struct BuilderState {
-    pub source_files: HashMap<u32, SourceFile>,
-    pub contracts: HashMap<u32, Contract>,
+    pub contract_data: HashMap<u32, ContractData>,
+
     pub functions: HashMap<u32, Function>,
-    pub custom_errors: HashMap<u32, CustomError>,
+    pub contracts: HashMap<u32, Contract>,
+
+    pub source_files: HashMap<u32, SourceFile>,
 }
 
 pub fn build_model(solc_input: &str, solc_output: &str) -> Result<Codebase, ModelBuilderError> {
@@ -81,7 +85,7 @@ pub fn build_model(solc_input: &str, solc_output: &str) -> Result<Codebase, Mode
     // Process ABIs
     //   Process custom errors
 
-    flatten_contract_inheritance(&mut builder_state)?;
+    // flatten_contract_inheritance(&mut builder_state)?;
 
     // decode bytecodes
 
@@ -142,12 +146,13 @@ fn process_contract_definition(
     let contract_type = contract_kind_to_contract_type(&contract_defintion.contract_kind);
 
     if let Some(contract_type) = contract_type {
-        let mut contract = Contract::new(
-            contract_defintion.name.clone(),
+        let mut contract_data = ContractData {
+            name: contract_defintion.name.clone(),
             contract_type,
-            parse_ast_src_location(&contract_defintion.src),
-            contract_defintion.linearized_base_contracts.clone(),
-        );
+            location: parse_ast_src_location(&contract_defintion.src),
+            linearized_base_contract_ids: contract_defintion.linearized_base_contracts.clone(),
+            local_function_ids: Vec::new(),
+        };
 
         contract_defintion
             .nodes
@@ -156,19 +161,23 @@ fn process_contract_definition(
             .try_for_each(|node| {
                 match node {
                     ast::ContractNode::FunctionDefinition(function_definition) => {
-                        contract.local_function_ids.insert(function_definition.id);
+                        contract_data
+                            .local_function_ids
+                            .push(function_definition.id);
 
                         process_contract_function_definition(
                             builder_state,
                             pubic_functions_map,
                             source_name,
-                            &mut contract,
+                            &mut contract_data,
                             contract_defintion.id,
                             function_definition,
                         )?;
                     }
                     ast::ContractNode::ModifierDefinition(modifier_definition) => {
-                        contract.local_function_ids.insert(modifier_definition.id);
+                        contract_data
+                            .local_function_ids
+                            .push(modifier_definition.id);
 
                         process_modifier_definition(
                             builder_state,
@@ -178,13 +187,15 @@ fn process_contract_definition(
                     }
                     ast::ContractNode::VariableDeclaration(variable_declaration) => {
                         if variable_declaration.visibility == ast::Visibility::Public {
-                            contract.local_function_ids.insert(variable_declaration.id);
+                            contract_data
+                                .local_function_ids
+                                .push(variable_declaration.id);
 
                             process_public_variable_declaration(
                                 builder_state,
                                 pubic_functions_map,
                                 source_name,
-                                &contract.name,
+                                &contract_data.name,
                                 contract_defintion.id,
                                 variable_declaration,
                             )?;
@@ -196,8 +207,8 @@ fn process_contract_definition(
             })?;
 
         builder_state
-            .contracts
-            .insert(contract_defintion.id, contract);
+            .contract_data
+            .insert(contract_defintion.id, contract_data);
     }
 
     Ok(())
@@ -239,7 +250,7 @@ fn process_contract_function_definition(
     builder_state: &mut BuilderState,
     public_functions_map: &PublicFunctionsMap,
     source_name: &String,
-    contract: &mut Contract,
+    contract_data: &mut ContractData,
     contract_id: u32,
     function_definition: &FunctionDefinition,
 ) -> Result<(), ModelBuilderError> {
@@ -249,7 +260,7 @@ fn process_contract_function_definition(
                 ContractFunction::PublicFunction(try_build_public_contract_function_model(
                     public_functions_map,
                     source_name,
-                    &contract.name,
+                    &contract_data.name,
                     contract_id,
                     &function_definition.src,
                     &function_definition.name,
@@ -280,9 +291,11 @@ fn process_contract_function_definition(
     };
 
     match function {
-        ContractFunction::Fallback(_) => contract.fallback_id = Some(function_definition.id),
-        ContractFunction::Receive(_) => contract.receive_id = Some(function_definition.id),
-        ContractFunction::Constructor(_) => contract.constructor_id = Some(function_definition.id),
+        ContractFunction::Fallback(_) => contract_data.fallback_id = Some(function_definition.id),
+        ContractFunction::Receive(_) => contract_data.receive_id = Some(function_definition.id),
+        ContractFunction::Constructor(_) => {
+            contract_data.constructor_id = Some(function_definition.id)
+        }
         _ => {}
     }
 
@@ -345,10 +358,8 @@ fn build_anonymous_contract_function_model(
     function_definition: &FunctionDefinition,
 ) -> AnonymousContractFunction {
     AnonymousContractFunction {
-        name: function_definition.name.clone(),
         location: parse_ast_src_location(&function_definition.src),
-        contract_id,
-        is_public: function_definition.visibility == ast::Visibility::Public
+        public: function_definition.visibility == ast::Visibility::Public
             || function_definition.visibility == ast::Visibility::External,
     }
 }

@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use super::source_location::SourceLocation;
 
 #[derive(Debug)]
@@ -12,32 +14,34 @@ pub struct FreeFunction {
     pub location: SourceLocation,
 }
 
+// Note: Some of these have Arc because we share them between contracts
 #[derive(Debug)]
 pub enum ContractFunction {
-    Constructor(AnonymousContractFunction),
-    Fallback(AnonymousContractFunction),
-    Receive(AnonymousContractFunction),
+    Constructor(Arc<AnonymousContractFunction>),
+    Fallback(Arc<AnonymousContractFunction>),
+    Receive(Arc<AnonymousContractFunction>),
     Modifier(InternalContractFunction),
-    Getter(PublicContractFunction),
-    PublicFunction(PublicContractFunction),
+    Getter(Arc<PublicContractFunction>),
+    PublicFunction(Arc<PublicContractFunction>),
     InternalFunction(InternalContractFunction),
 }
 
 #[derive(Debug)]
 pub struct AnonymousContractFunction {
-    pub name: String,
     pub location: SourceLocation,
-    pub contract_id: u32,
-    pub is_public: bool,
+    pub public: bool,
 }
 
 #[derive(Debug)]
 pub struct PublicContractFunction {
     pub name: String,
     pub location: SourceLocation,
-    pub contract_id: u32,
     pub payable: bool,
     pub selector: [u8; 4],
+
+    // Note: Having the method identifier is enough to represent its abi, that's why
+    //   I'm saving it here, not because we need it, we don't. This should be replaced
+    //   with the propoer internal representation of the ABI and the right public mehtods.
     pub method_identifier: String,
 }
 
@@ -45,11 +49,4 @@ pub struct PublicContractFunction {
 pub struct InternalContractFunction {
     pub name: String,
     pub location: SourceLocation,
-    pub contract_id: u32,
-}
-
-impl PublicContractFunction {
-    pub fn is_valid_calldata(calldata: &[u8]) -> bool {
-        true
-    }
 }

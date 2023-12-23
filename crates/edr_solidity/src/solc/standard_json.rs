@@ -63,7 +63,6 @@ mod tests {
     use std::{
         fs, io,
         path::{Path, PathBuf},
-        str::FromStr,
     };
 
     use super::*;

@@ -1,8 +1,5 @@
-use super::ast::{self, FunctionKind};
-use crate::{
-    model::{contract::ContractType, source_location::SourceLocation},
-    solc::ast::ContractKind,
-};
+use super::ast::{self, ContractKind};
+use crate::model::{ContractType, SourceLocation};
 
 pub fn parse_hex_function_selector(selector: &String) -> Option<[u8; 4]> {
     if selector.len() == 8 {

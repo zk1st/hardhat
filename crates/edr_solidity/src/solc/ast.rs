@@ -196,7 +196,7 @@ fn deserialize_top_level_nodes<'de, D>(
 where
     D: Deserializer<'de>,
 {
-    deserialize_non_exhaustive_enun_vec(
+    deserialize_non_exhaustive_enum_vec(
         deserializer,
         "nodeType",
         &["ContractDefinition", "FunctionDefinition"],
@@ -209,7 +209,7 @@ fn deserialize_contract_definition_nodes<'de, D>(
 where
     D: Deserializer<'de>,
 {
-    deserialize_non_exhaustive_enun_vec(
+    deserialize_non_exhaustive_enum_vec(
         deserializer,
         "nodeType",
         &[
@@ -220,7 +220,7 @@ where
     )
 }
 
-pub fn deserialize_non_exhaustive_enun_vec<'de, D, T>(
+pub fn deserialize_non_exhaustive_enum_vec<'de, D, T>(
     deserializer: D,
     tag_name: &'static str,
     variants: &'static [&'static str],

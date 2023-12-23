@@ -1,4 +1,4 @@
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 pub struct SourceLocation {
     pub file: u32,
     pub offset: u32,
@@ -11,6 +11,4 @@ impl SourceLocation {
             && self.offset <= other.offset
             && self.offset + self.length >= other.offset + other.length
     }
-
-    // starting line?
 }
