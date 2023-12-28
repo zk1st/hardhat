@@ -8,7 +8,7 @@ use edr_eth::{
     Address, U256,
 };
 use revm::{
-    interpreter::gas::initial_tx_gas,
+    interpreter::gas::validate_initial_tx_gas as initial_tx_gas,
     primitives::{
         BerlinSpec, ByzantiumSpec, CreateScheme, FrontierSpec, HomesteadSpec, IstanbulSpec,
         LatestSpec, LondonSpec, MergeSpec, PetersburgSpec, ShanghaiSpec, SpecId,

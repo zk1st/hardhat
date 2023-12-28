@@ -3,11 +3,12 @@ use std::fmt::Debug;
 use revm::{
     db::{DatabaseComponents, StateRef},
     primitives::{BlockEnv, CfgEnv, ExecutionResult, ResultAndState, SpecId, TxEnv},
+    EvmBuilder,
 };
 
 use crate::{
     blockchain::SyncBlockchain,
-    evm::{build_evm, run_transaction, SyncInspector},
+    inspector::SyncInspector,
     state::{StateOverrides, StateRefOverrider, SyncState},
     transaction::TransactionError,
 };
@@ -28,6 +29,7 @@ pub fn dry_run<BlockchainErrorT, StateErrorT>(
     blockchain: &dyn SyncBlockchain<BlockchainErrorT, StateErrorT>,
     state: &dyn SyncState<StateErrorT>,
     state_overrides: &StateOverrides,
+    spec_id: SpecId,
     cfg: CfgEnv,
     transaction: TxEnv,
     block: BlockEnv,
@@ -37,19 +39,34 @@ where
     BlockchainErrorT: Debug + Send,
     StateErrorT: Debug + Send,
 {
-    if cfg.spec_id > SpecId::MERGE && block.prevrandao.is_none() {
+    if spec_id > SpecId::MERGE && block.prevrandao.is_none() {
         return Err(TransactionError::MissingPrevrandao);
     }
 
-    if transaction.gas_priority_fee.is_some() && cfg.spec_id < SpecId::LONDON {
+    if transaction.gas_priority_fee.is_some() && spec_id < SpecId::LONDON {
         return Err(TransactionError::Eip1559Unsupported);
     }
 
     let state_overrider = StateRefOverrider::new(state_overrides, &state);
 
-    let evm = build_evm(blockchain, &state_overrider, cfg, transaction, block);
+    let mut evm = EvmBuilder::default()
+        .with_ref_db(DatabaseComponents {
+            state,
+            block_hash: blockchain,
+        })
+        .with_spec_id(spec_id)
+        .modify_block_env(|evm_block| {
+            *evm_block = block;
+        })
+        .modify_cfg_env(|evm_cfg| {
+            *evm_cfg = cfg;
+        })
+        .modify_tx_env(|evm_tx| {
+            *evm_tx = transaction;
+        })
+        .build();
 
-    run_transaction(evm, inspector).map_err(TransactionError::from)
+    evm.transact().map_err(TransactionError::from)
 }
 
 /// Runs a transaction without committing the state, while disabling balance
@@ -59,6 +76,7 @@ pub fn guaranteed_dry_run<BlockchainErrorT, StateErrorT>(
     blockchain: &dyn SyncBlockchain<BlockchainErrorT, StateErrorT>,
     state: &dyn SyncState<StateErrorT>,
     state_overrides: &StateOverrides,
+    spec_id: SpecId,
     mut cfg: CfgEnv,
     transaction: TxEnv,
     block: BlockEnv,
@@ -74,6 +92,7 @@ where
         blockchain,
         state,
         state_overrides,
+        spec_id,
         cfg,
         transaction,
         block,
@@ -86,6 +105,7 @@ where
 pub fn run<BlockchainErrorT, StateErrorT>(
     blockchain: &dyn SyncBlockchain<BlockchainErrorT, StateErrorT>,
     state: &mut dyn SyncState<StateErrorT>,
+    spec_id: SpecId,
     cfg: CfgEnv,
     transaction: TxEnv,
     block: BlockEnv,
@@ -102,6 +122,7 @@ where
         blockchain,
         state,
         &StateOverrides::default(),
+        spec_id,
         cfg,
         transaction,
         block,

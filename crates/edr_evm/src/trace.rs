@@ -126,6 +126,7 @@ where
         context: &mut EvmContext<'_, DatabaseError>,
         inputs: &mut CallInputs,
     ) -> Option<(InterpreterResult, Range<usize>)> {
+        println!("call");
         self.validate_before_message();
 
         // This needs to be split into two functions to avoid borrow checker issues
@@ -173,6 +174,7 @@ where
         context: &mut EvmContext<'_, DatabaseError>,
         result: InterpreterResult,
     ) -> InterpreterResult {
+        println!("call_end");
         match result.result {
             return_revert!() if self.pending_before.is_some() => {
                 self.pending_before = None;
@@ -209,6 +211,7 @@ where
                 gas_used: result.gas.limit(),
             },
             SuccessOrHalt::InternalCallOrCreate | SuccessOrHalt::InternalContinue => {
+                println!("test");
                 panic!("Internal error: {safe_ret:?}")
             }
             SuccessOrHalt::FatalExternalError => panic!("Fatal external error"),
@@ -224,6 +227,7 @@ where
         context: &mut EvmContext<'_, DatabaseError>,
         inputs: &mut CreateInputs,
     ) -> Option<(InterpreterResult, Option<Address>)> {
+        println!("create");
         self.validate_before_message();
 
         self.pending_before = Some(BeforeMessage {
@@ -246,6 +250,7 @@ where
         result: InterpreterResult,
         address: Option<Address>,
     ) -> (InterpreterResult, Option<Address>) {
+        println!("create_end");
         self.validate_before_message();
 
         let safe_ret = if result.result == InstructionResult::CallTooDeep
@@ -284,6 +289,7 @@ where
     }
 
     fn step(&mut self, interp: &mut Interpreter, context: &mut EvmContext<'_, DatabaseError>) {
+        println!("step");
         // Skip the step
         let skip_step = self.pending_before.as_ref().map_or(false, |message| {
             message.code.is_some() && interp.current_opcode() == opcode::STOP

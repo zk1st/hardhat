@@ -60,6 +60,8 @@ export class VMTracer {
       return;
     }
 
+    console.log("before:", message);
+
     try {
       let trace: MessageTrace;
 
@@ -156,6 +158,8 @@ export class VMTracer {
     if (!this._shouldKeepTracing()) {
       return;
     }
+
+    console.log("trace:", step);
 
     this.tracingSteps.push(step);
 

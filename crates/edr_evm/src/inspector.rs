@@ -7,10 +7,23 @@ use revm::{
     EvmContext, Inspector,
 };
 
-use crate::{
-    evm::SyncInspector,
-    trace::{Trace, TraceCollector},
-};
+use crate::trace::{Trace, TraceCollector};
+
+/// Super trait for an inspector of an `AsyncDatabase` that's debuggable.
+pub trait SyncInspector<BE, SE>: Inspector<DatabaseComponentError<SE, BE>> + Debug + Send
+where
+    BE: Debug + Send,
+    SE: Debug + Send,
+{
+}
+
+impl<I, BE, SE> SyncInspector<BE, SE> for I
+where
+    I: Inspector<DatabaseComponentError<SE, BE>> + Debug + Send,
+    BE: Debug + Send,
+    SE: Debug + Send,
+{
+}
 
 // TODO: Improve this design by introducing a InspectorMut trait
 

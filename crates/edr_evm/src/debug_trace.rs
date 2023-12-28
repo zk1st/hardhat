@@ -2,18 +2,16 @@ use std::{collections::HashMap, fmt::Debug, ops::Range};
 
 use edr_eth::{signature::SignatureError, utils::u256_to_hex_word, B256};
 use revm::{
+    db::DatabaseComponents,
     inspectors::GasInspector,
     interpreter::{opcode, CallInputs, CreateInputs, Interpreter, InterpreterResult},
     primitives::{
         hex, Address, BlockEnv, Bytes, CfgEnv, ExecutionResult, ResultAndState, SpecId, U256,
     },
-    EvmContext, Inspector, JournalEntry,
+    EvmBuilder, EvmContext, Inspector, JournalEntry, Database, handler::register::EvmHandler,
 };
 
-use crate::{
-    blockchain::SyncBlockchain, evm::build_evm, state::SyncState, PendingTransaction,
-    TransactionError,
-};
+use crate::{blockchain::SyncBlockchain, state::SyncState, PendingTransaction, TransactionError};
 
 /// Get trace output for `debug_traceTransaction`
 #[cfg_attr(feature = "tracing", tracing::instrument)]
@@ -21,7 +19,8 @@ pub fn debug_trace_transaction<BlockchainErrorT, StateErrorT>(
     blockchain: &dyn SyncBlockchain<BlockchainErrorT, StateErrorT>,
     // Take ownership of the state so that we can apply throw-away modifications on it
     mut state: Box<dyn SyncState<StateErrorT>>,
-    evm_config: CfgEnv,
+    spec_id: SpecId,
+    cfg: CfgEnv,
     trace_config: DebugTraceConfig,
     block_env: BlockEnv,
     transactions: Vec<PendingTransaction>,
@@ -31,45 +30,55 @@ where
     BlockchainErrorT: Debug + Send,
     StateErrorT: Debug + Send,
 {
-    if evm_config.spec_id < SpecId::SPURIOUS_DRAGON {
+    if spec_id < SpecId::SPURIOUS_DRAGON {
         // Matching Hardhat Network behaviour: https://github.com/NomicFoundation/hardhat/blob/af7e4ce6a18601ec9cd6d4aa335fa7e24450e638/packages/hardhat-core/src/internal/hardhat-network/provider/vm/ethereumjs.ts#L427
-        return Err(DebugTraceError::InvalidSpecId {
-            spec_id: evm_config.spec_id,
-        });
+        return Err(DebugTraceError::InvalidSpecId { spec_id });
     }
 
-    if evm_config.spec_id > SpecId::MERGE && block_env.prevrandao.is_none() {
+    if spec_id > SpecId::MERGE && block_env.prevrandao.is_none() {
         return Err(TransactionError::MissingPrevrandao.into());
     }
 
     for transaction in transactions {
+        let evm_builder = EvmBuilder::default()
+            .with_ref_db(DatabaseComponents {
+                state,
+                block_hash: blockchain,
+            })
+            .with_spec_id(spec_id)
+            .modify_block_env(|evm_block| {
+                *evm_block = block_env;
+            })
+            .modify_cfg_env(|evm_cfg| {
+                *evm_cfg = cfg;
+            })
+            .modify_tx_env(|evm_tx| {
+                *evm_tx = transaction.into();
+            });
+
         if transaction.hash() == transaction_hash {
-            let evm = build_evm(
-                blockchain,
-                &state,
-                evm_config,
-                transaction.into(),
-                block_env,
-            );
             let mut tracer = TracerEip3155::new(trace_config);
+
+            // TODO: set handler
+            evm_builder.append_handler_register(register_eip3155_tracer_handle)
+
+            let mut evm = evm_builder
+                .with_external_context(tracer)
+                .handle
+            .build();
+
             let ResultAndState {
                 result: execution_result,
                 ..
-            } = evm
-                .inspect_ref(&mut tracer)
-                .map_err(TransactionError::from)?;
+            } = evm.transact().map_err(TransactionError::from)?;
 
             return Ok(execution_result_to_debug_result(execution_result, tracer));
         } else {
-            let evm = build_evm(
-                blockchain,
-                &state,
-                evm_config.clone(),
-                transaction.into(),
-                block_env.clone(),
-            );
+            let mut evm = evm_builder.build();
+
             let ResultAndState { state: changes, .. } =
-                evm.transact_ref().map_err(TransactionError::from)?;
+                evm.transact().map_err(TransactionError::from)?;
+
             state.commit(changes);
         }
     }
@@ -108,6 +117,10 @@ pub fn execution_result_to_debug_result(
         },
     }
 }
+
+pub fn register_eip3155_tracer_handle<'a, DatabaseT: Database, ExternalT: GetEip3155Tracer>(
+    handler: &mut EvmHandler<'a, ExternalT, DatabaseT>
+)
 
 /// Config options for `debug_trace_transaction`
 #[derive(Debug, Default, Clone)]
@@ -179,6 +192,11 @@ pub struct DebugTraceLogItem {
     pub memory: Option<Vec<String>>,
     /// Map of all stored values with keys and values encoded as hex strings.
     pub storage: Option<HashMap<String, String>>,
+}
+
+/// Trait for retrieving the EIP-3155 tracer.
+pub trait GetEip3155Tracer {
+    fn eip3155_tracer(&mut self) -> &mut TracerEip3155;
 }
 
 /// An EIP-3155 compatible EVM tracer.

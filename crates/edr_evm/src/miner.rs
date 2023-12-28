@@ -9,8 +9,7 @@ use revm::primitives::{CfgEnv, ExecutionResult, InvalidTransaction, SpecId};
 use crate::{
     block::BlockBuilderCreationError,
     blockchain::SyncBlockchain,
-    evm::SyncInspector,
-    inspector::InspectorContainer,
+    inspector::{InspectorContainer, SyncInspector},
     mempool::OrderedTransaction,
     state::{StateDiff, SyncState},
     trace::Trace,

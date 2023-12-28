@@ -12,17 +12,18 @@ use edr_eth::{
     Address, Bloom, U256,
 };
 use revm::{
-    db::DatabaseComponentError,
+    db::{DatabaseComponentError, DatabaseComponents},
     primitives::{
         AccountInfo, BlobExcessGasAndPrice, BlockEnv, CfgEnv, EVMError, ExecutionResult,
         InvalidHeader, InvalidTransaction, Output, ResultAndState, SpecId,
     },
+    EvmBuilder,
 };
 
 use super::local::LocalBlock;
 use crate::{
     blockchain::SyncBlockchain,
-    evm::{build_evm, run_transaction, SyncInspector},
+    inspector::SyncInspector,
     state::{AccountModifierFn, StateDiff, SyncState},
     PendingTransaction,
 };
@@ -96,6 +97,7 @@ pub struct BuildBlockResult {
 /// A builder for constructing Ethereum blocks.
 pub struct BlockBuilder {
     cfg: CfgEnv,
+    spec_id: SpecId,
     header: PartialHeader,
     callers: Vec<Address>,
     transactions: Vec<SignedTransaction>,
@@ -109,6 +111,7 @@ impl BlockBuilder {
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
     pub fn new(
         cfg: CfgEnv,
+        spec_id: SpecId,
         parent: &Header,
         options: BlockOptions,
     ) -> Result<Self, BlockBuilderCreationError> {
@@ -142,6 +145,7 @@ impl BlockBuilder {
 
         Ok(Self {
             cfg,
+            spec_id,
             header,
             callers: Vec::new(),
             transactions: Vec::new(),
@@ -212,18 +216,27 @@ impl BlockBuilder {
                 .map(|BlobGas { excess_gas, .. }| BlobExcessGasAndPrice::new(*excess_gas)),
         };
 
-        let evm = build_evm(
-            blockchain,
-            &state,
-            self.cfg.clone(),
-            transaction.clone().into(),
-            block.clone(),
-        );
+        let mut evm = EvmBuilder::default()
+            .with_ref_db(DatabaseComponents {
+                state,
+                block_hash: blockchain,
+            })
+            .with_spec_id(self.spec_id)
+            .modify_block_env(|evm_block| {
+                *evm_block = block;
+            })
+            .modify_cfg_env(|evm_cfg| {
+                *evm_cfg = self.cfg;
+            })
+            .modify_tx_env(|evm_tx| {
+                *evm_tx = transaction.into();
+            })
+            .build();
 
         let ResultAndState {
             result,
             state: state_diff,
-        } = run_transaction(evm, inspector)?;
+        } = evm.transact()?;
 
         self.state_diff.apply_diff(state_diff.clone());
 
