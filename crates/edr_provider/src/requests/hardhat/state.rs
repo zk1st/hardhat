@@ -1,6 +1,14 @@
-use edr_eth::{serde::ZeroXPrefixedBytes, Address, U256};
+use edr_eth::{Address, Bytes, U256};
 
-use crate::{data::ProviderData, ProviderError};
+use crate::{data::ProviderData, requests::hardhat::rpc_types::ResetProviderConfig, ProviderError};
+
+pub fn handle_reset(
+    data: &mut ProviderData,
+    config: Option<ResetProviderConfig>,
+) -> Result<bool, ProviderError> {
+    data.reset(config.and_then(|c| c.forking))?;
+    Ok(true)
+}
 
 pub fn handle_set_balance(
     data: &mut ProviderData,
@@ -15,9 +23,9 @@ pub fn handle_set_balance(
 pub fn handle_set_code(
     data: &mut ProviderData,
     address: Address,
-    code: ZeroXPrefixedBytes,
+    code: Bytes,
 ) -> Result<bool, ProviderError> {
-    data.set_code(address, code.into())?;
+    data.set_code(address, code)?;
 
     Ok(true)
 }

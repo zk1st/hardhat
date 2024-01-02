@@ -3,6 +3,7 @@ use std::{
     sync::Arc,
 };
 
+use edr_eth::Bytes;
 use thiserror::Error;
 use versions::SemVer;
 
@@ -114,7 +115,7 @@ pub fn build_model(
                 normalize_bytecode(&contract_output.evm.deployed_bytecode)?;
 
             let runtime_bytecode = Bytecode::new(
-                contract.clone(),
+                Some(contract.clone()),
                 BytecodeType::Runtime,
                 normalized_code,
                 library_offsets,
@@ -125,7 +126,7 @@ pub fn build_model(
                 normalize_bytecode(&contract_output.evm.bytecode)?;
 
             let deployment_bytecode = Bytecode::new(
-                contract.clone(),
+                Some(contract.clone()),
                 BytecodeType::Deployment,
                 normalized_code,
                 library_offsets,
@@ -516,7 +517,7 @@ fn add_source_file(
 
 fn normalize_bytecode(
     compiler_output_bytecode: &CompilerOutputBytecode,
-) -> Result<(Vec<u8>, Vec<usize>, Vec<ImmutableReference>), ModelBuilderError> {
+) -> Result<(Bytes, Vec<usize>, Vec<ImmutableReference>), ModelBuilderError> {
     let mut bytecode = compiler_output_bytecode.object.clone();
     let link_references = &compiler_output_bytecode.link_references;
 
@@ -557,5 +558,9 @@ fn normalize_bytecode(
         })
         .unwrap_or_default();
 
-    Ok((normalized_bytecode, library_offsets, immutable_references))
+    Ok((
+        normalized_bytecode.into(),
+        library_offsets,
+        immutable_references,
+    ))
 }

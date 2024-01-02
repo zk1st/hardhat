@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use edr_eth::{
     block::{BlobGas, PartialHeader},
-    transaction::{EIP155TransactionRequest, SignedTransaction, TransactionKind},
+    transaction::{Eip155TransactionRequest, SignedTransaction, TransactionKind},
     trie::KECCAK_NULL_RLP,
     Address, Bytes, B256, U256,
 };
@@ -35,6 +35,7 @@ async fn create_forked_dummy_blockchain() -> Box<dyn SyncBlockchain<BlockchainEr
     Box::new(
         ForkedBlockchain::new(
             tokio::runtime::Handle::current().clone(),
+            None,
             SpecId::LATEST,
             rpc_client,
             None,
@@ -58,7 +59,7 @@ async fn create_dummy_blockchains() -> Vec<Box<dyn SyncBlockchain<BlockchainErro
         SpecId::LATEST,
         DEFAULT_GAS_LIMIT,
         None,
-        Some(B256::zero()),
+        Some(B256::ZERO),
         Some(U256::from(DEFAULT_INITIAL_BASE_FEE)),
         Some(BlobGas {
             gas_used: 0,
@@ -136,7 +137,7 @@ fn create_dummy_transaction() -> SignedTransaction {
     let to = Address::from_str("0xc014ba5ec014ba5ec014ba5ec014ba5ec014ba5e")
         .expect("default value should be known to succeed");
 
-    let transaction = EIP155TransactionRequest {
+    let transaction = Eip155TransactionRequest {
         nonce: 0,
         gas_price: U256::ZERO,
         gas_limit: 0,
@@ -195,7 +196,7 @@ async fn get_block_by_hash_none() {
     let blockchains = create_dummy_blockchains().await;
 
     for blockchain in blockchains {
-        assert!(blockchain.block_by_hash(&B256::zero()).unwrap().is_none());
+        assert!(blockchain.block_by_hash(&B256::ZERO).unwrap().is_none());
     }
 }
 
@@ -296,7 +297,7 @@ async fn insert_block_invalid_parent_hash() {
     let blockchains = create_dummy_blockchains().await;
 
     for mut blockchain in blockchains {
-        const INVALID_BLOCK_HASH: B256 = B256::zero();
+        const INVALID_BLOCK_HASH: B256 = B256::ZERO;
         let next_block_number = blockchain.last_block_number() + 1;
 
         let one = create_dummy_block_with_hash(next_block_number, INVALID_BLOCK_HASH);
@@ -438,7 +439,7 @@ async fn block_total_difficulty_by_hash_invalid_hash() {
     let blockchains = create_dummy_blockchains().await;
 
     for blockchain in blockchains {
-        let difficulty = blockchain.total_difficulty_by_hash(&B256::zero()).unwrap();
+        let difficulty = blockchain.total_difficulty_by_hash(&B256::ZERO).unwrap();
 
         assert!(difficulty.is_none());
     }

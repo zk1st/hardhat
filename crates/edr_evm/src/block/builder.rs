@@ -5,7 +5,7 @@ use std::{
 
 use edr_eth::{
     block::{BlobGas, BlockOptions, Header, PartialHeader},
-    log::Log,
+    log::{add_log_to_bloom, Log},
     receipt::{TransactionReceipt, TypedReceipt, TypedReceiptData},
     transaction::SignedTransaction,
     trie::ordered_trie_root,
@@ -44,6 +44,14 @@ pub enum BlockTransactionError<BE, SE> {
     /// Transaction has higher gas limit than is remaining in block
     #[error("Transaction has a higher gas limit than the remaining gas in the block")]
     ExceedsBlockGasLimit,
+    /// Sender does not have enough funds to send transaction.
+    #[error("Sender doesn't have enough funds to send tx. The max upfront cost is: {max_upfront_cost} and the sender's balance is: {sender_balance}.")]
+    InsufficientFunds {
+        /// The maximum upfront cost of the transaction
+        max_upfront_cost: U256,
+        /// The sender's balance
+        sender_balance: U256,
+    },
     /// Corrupt transaction data
     #[error("Invalid transaction: {0:?}")]
     InvalidTransaction(InvalidTransaction),
@@ -54,12 +62,20 @@ pub enum BlockTransactionError<BE, SE> {
 
 impl<BE, SE> From<EVMError<DatabaseComponentError<SE, BE>>> for BlockTransactionError<BE, SE>
 where
-    BE: Debug + Send + 'static,
-    SE: Debug + Send + 'static,
+    BE: Debug + Send,
+    SE: Debug + Send,
 {
     fn from(error: EVMError<DatabaseComponentError<SE, BE>>) -> Self {
         match error {
-            EVMError::Transaction(e) => Self::InvalidTransaction(e),
+            EVMError::Transaction(e) => match e {
+                InvalidTransaction::LackOfFundForMaxFee { fee, balance } => {
+                    Self::InsufficientFunds {
+                        max_upfront_cost: U256::from(fee),
+                        sender_balance: balance,
+                    }
+                }
+                _ => Self::InvalidTransaction(e),
+            },
             EVMError::Header(
                 InvalidHeader::ExcessBlobGasNotSet | InvalidHeader::PrevrandaoNotSet,
             ) => unreachable!("error: {error:?}"),
@@ -168,8 +184,8 @@ impl BlockBuilder {
         inspector: Option<&mut dyn SyncInspector<BlockchainErrorT, StateErrorT>>,
     ) -> Result<ExecutionResult, BlockTransactionError<BlockchainErrorT, StateErrorT>>
     where
-        BlockchainErrorT: Debug + Send + 'static,
-        StateErrorT: Debug + Send + 'static,
+        BlockchainErrorT: Debug + Send,
+        StateErrorT: Debug + Send,
     {
         //  transaction's gas limit cannot be greater than the remaining gas in the
         // block
@@ -217,9 +233,9 @@ impl BlockBuilder {
 
         let logs: Vec<Log> = result.logs().into_iter().map(Log::from).collect();
         let logs_bloom = {
-            let mut bloom = Bloom::zero();
+            let mut bloom = Bloom::ZERO;
             for log in &logs {
-                log.add_to_bloom(&mut bloom);
+                add_log_to_bloom(log, &mut bloom);
             }
             bloom
         };
@@ -326,7 +342,7 @@ impl BlockBuilder {
             .expect("Must be able to calculate state root");
 
         self.header.logs_bloom = {
-            let mut logs_bloom = Bloom::zero();
+            let mut logs_bloom = Bloom::ZERO;
             self.receipts.iter().for_each(|receipt| {
                 logs_bloom.accrue_bloom(receipt.logs_bloom());
             });
@@ -336,7 +352,7 @@ impl BlockBuilder {
         self.header.receipts_root = ordered_trie_root(
             self.receipts
                 .iter()
-                .map(|receipt| rlp::encode(&**receipt).freeze()),
+                .map(|receipt| alloy_rlp::encode(&**receipt)),
         );
 
         if let Some(timestamp) = timestamp {

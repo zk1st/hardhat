@@ -1,12 +1,11 @@
 use std::{collections::HashMap, sync::Arc};
 
-use super::{
-    opcode::{decode_opcode, Opcode},
-    source_map::SourceMap,
-    Contract,
-};
+use edr_eth::Bytes;
+use revm::interpreter::OpCode;
 
-#[derive(Debug)]
+use super::{source_map::SourceMap, Contract};
+
+#[derive(Debug, PartialEq)]
 pub enum BytecodeType {
     Runtime,
     Deployment,
@@ -20,9 +19,9 @@ pub struct ImmutableReference {
 
 #[derive(Debug)]
 pub struct Bytecode {
-    pub contract: Arc<Contract>,
+    pub contract: Option<Arc<Contract>>,
     pub bytecode_type: BytecodeType,
-    pub normalized_code: Vec<u8>,
+    pub normalized_code: Bytes,
     pub library_offsets: Vec<usize>,
     pub immutable_references: Vec<ImmutableReference>,
     pc_to_source_maps: HashMap<usize, SourceMap>,
@@ -30,9 +29,9 @@ pub struct Bytecode {
 
 impl Bytecode {
     pub fn new(
-        contract: Arc<Contract>,
+        contract: Option<Arc<Contract>>,
         bytecode_type: BytecodeType,
-        normalized_code: Vec<u8>,
+        normalized_code: Bytes,
         library_offsets: Vec<usize>,
         immutable_references: Vec<ImmutableReference>,
     ) -> Self {
@@ -46,12 +45,18 @@ impl Bytecode {
             pc_to_source_maps: HashMap::new(),
         }
     }
-    pub fn get_instruction(&self, program_counter: usize) -> Instruction {
+
+    pub fn get_instruction(&self, program_counter: usize) -> Option<Instruction> {
         let source_map = self.pc_to_source_maps.get(&program_counter).cloned();
-        Instruction {
-            opcode: decode_opcode(&self.normalized_code, program_counter),
-            source_map,
-        }
+
+        self.normalized_code
+            .get(program_counter)
+            .and_then(|opcode| revm::interpreter::opcode::OpCode::new(*opcode))
+            .map(|opcode| Instruction { opcode, source_map })
+    }
+
+    pub fn is_deployment(&self) -> bool {
+        self.bytecode_type == BytecodeType::Deployment
     }
 }
 
@@ -71,6 +76,6 @@ impl std::hash::Hash for Bytecode {
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct Instruction {
-    pub opcode: Opcode,
+    pub opcode: OpCode,
     pub source_map: Option<SourceMap>,
 }

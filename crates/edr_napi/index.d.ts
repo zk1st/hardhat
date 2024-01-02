@@ -160,8 +160,6 @@ export interface ConfigOptions {
   specId?: SpecId
   /** The contract code size limit for EIP-170 */
   limitContractCodeSize?: bigint
-  /** The initcode code size limit for EIP-31860 */
-  limitInitcodeSize?: bigint
   /** Disables block limit validation */
   disableBlockGasLimit?: boolean
   /**
@@ -253,6 +251,10 @@ export interface ProviderConfig {
   allowBlocksWithSameTimestamp: boolean
   /** Whether to allow unlimited contract size */
   allowUnlimitedContractSize: boolean
+  /** Whether to return an `Err` when `eth_call` fails */
+  bailOnCallFailure: boolean
+  /** Whether to return an `Err` when a `eth_sendTransaction` fails */
+  bailOnTransactionFailure: boolean
   /** The gas limit of each block */
   blockGasLimit: bigint
   /** The directory to cache remote JSON-RPC responses */
@@ -284,6 +286,8 @@ export interface ProviderConfig {
    * EIP-4788
    */
   initialParentBeaconBlockRoot?: Buffer
+  /** The minimum gas price of the next block. */
+  minGasPrice: bigint
   /** The configuration for the miner */
   mining: MiningConfig
   /** The network ID of the blockchain */
@@ -678,7 +682,7 @@ export class MineBlockResult {
 /** A JSON-RPC provider for Ethereum. */
 export class Provider {
   /**Constructs a new provider with the provided configuration. */
-  static withConfig(config: ProviderConfig): Promise<Provider>
+  static withConfig(config: ProviderConfig, consoleLogCallback: (message: Buffer) => void): Promise<Provider>
   /**Handles a JSON-RPC request and returns a JSON-RPC response. */
   handleRequest(jsonRequest: string): Promise<string>
 }
@@ -785,7 +789,7 @@ export class OrderedTransaction {
 }
 export class PendingTransaction {
   /** Tries to construct a new [`PendingTransaction`]. */
-  static create(stateManager: State, specId: SpecId, transaction: LegacySignedTransaction | Eip2930SignedTransaction | Eip1559SignedTransaction | Eip4844SignedTransaction, caller?: Buffer | undefined | null): Promise<PendingTransaction>
+  static create(specId: SpecId, transaction: LegacySignedTransaction | Eip2930SignedTransaction | Eip1559SignedTransaction | Eip4844SignedTransaction, caller?: Buffer | undefined | null): Promise<PendingTransaction>
   get caller(): Buffer
   get transaction(): LegacySignedTransaction | Eip2930SignedTransaction | Eip1559SignedTransaction | Eip4844SignedTransaction
 }

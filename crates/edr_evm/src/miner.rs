@@ -9,15 +9,17 @@ use revm::primitives::{CfgEnv, ExecutionResult, InvalidTransaction, SpecId};
 use crate::{
     block::BlockBuilderCreationError,
     blockchain::SyncBlockchain,
+    evm::SyncInspector,
     inspector::InspectorContainer,
     mempool::OrderedTransaction,
     state::{StateDiff, SyncState},
     trace::Trace,
     BlockBuilder, BlockTransactionError, BuildBlockResult, LocalBlock, MemPool, PendingTransaction,
-    SyncBlock, SyncInspector,
+    SyncBlock,
 };
 
 /// The result of mining a block, after having been committed to the blockchain.
+#[derive(Debug)]
 pub struct MineBlockResult<BlockchainErrorT> {
     /// Mined block
     pub block: Arc<dyn SyncBlock<Error = BlockchainErrorT>>,
@@ -43,7 +45,7 @@ pub struct MineBlockResultAndState<StateErrorT> {
 }
 
 /// The type of ordering to use when selecting blocks to mine.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum MineOrdering {
     /// Insertion order
     Fifo,
@@ -87,11 +89,11 @@ pub fn mine_block<BlockchainErrorT, StateErrorT>(
     reward: U256,
     base_fee: Option<U256>,
     prevrandao: Option<B256>,
-    inspector: Option<Box<dyn SyncInspector<BlockchainErrorT, StateErrorT>>>,
+    inspector: Option<&mut dyn SyncInspector<BlockchainErrorT, StateErrorT>>,
 ) -> Result<MineBlockResultAndState<StateErrorT>, MineBlockError<BlockchainErrorT, StateErrorT>>
 where
-    BlockchainErrorT: Debug + Send + 'static,
-    StateErrorT: Debug + Send + 'static,
+    BlockchainErrorT: Debug + Send,
+    StateErrorT: Debug + Send,
 {
     let parent_block = blockchain
         .last_block()
@@ -120,7 +122,7 @@ where
             nonce: Some(if cfg.spec_id >= SpecId::MERGE {
                 B64::ZERO
             } else {
-                B64::from_limbs([66u64.to_be()])
+                B64::from(66u64)
             }),
             base_fee,
             ..Default::default()
@@ -218,7 +220,7 @@ where
 /// # Panics
 ///
 /// Panics if the parent header does not contain a base fee.
-fn calculate_next_base_fee(parent: &Header) -> U256 {
+pub fn calculate_next_base_fee(parent: &Header) -> U256 {
     let elasticity = 2;
     let base_fee_max_change_denominator = U256::from(8);
 
