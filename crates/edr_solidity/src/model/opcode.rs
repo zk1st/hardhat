@@ -309,6 +309,7 @@ pub enum Opcode {
 }
 
 impl Opcode {
+    #[allow(dead_code)]
     fn len(&self) -> usize {
         match self {
             Opcode::PUSH1 => 2,
@@ -348,7 +349,7 @@ impl Opcode {
     }
 }
 
-pub fn decode_opcode(bytecode: &Vec<u8>, program_counter: usize) -> Opcode {
+pub fn decode_opcode(bytecode: &[u8], program_counter: usize) -> Opcode {
     let raw_opcode = bytecode[program_counter];
 
     // SAFETY: There's an Opcode varian for every possible u8 value, so this is

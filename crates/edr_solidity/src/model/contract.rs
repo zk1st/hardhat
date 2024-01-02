@@ -1,14 +1,11 @@
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
+use std::{collections::HashMap, sync::Arc};
 
 use super::{
     custom_error::CustomError, source_location::SourceLocation, AnonymousContractFunction,
     PublicContractFunction,
 };
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ContractType {
     Library,
     Contract,

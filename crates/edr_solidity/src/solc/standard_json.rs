@@ -65,6 +65,8 @@ mod tests {
         path::{Path, PathBuf},
     };
 
+    use versions::SemVer;
+
     use super::*;
     use crate::solc::model_builder::build_model;
 
@@ -127,7 +129,11 @@ mod tests {
                 let input_content = fs::read_to_string(path.replace("output", "input")).unwrap();
                 let output_content = fs::read_to_string(path).unwrap();
 
-                let codebase = build_model(&input_content, &output_content).unwrap();
+                let raw_version = path.split("/").last().unwrap().split("-").nth(3).unwrap();
+
+                let solc_version = SemVer::parse(raw_version).unwrap().1;
+
+                let codebase = build_model(solc_version, &input_content, &output_content).unwrap();
 
                 print!("{:#?}\n\n\n\n\n\n\n", &codebase);
             }

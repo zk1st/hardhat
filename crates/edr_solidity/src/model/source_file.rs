@@ -17,9 +17,10 @@ pub struct SourceFile {
 }
 
 impl SourceFile {
-    pub fn new(source_name: String, content: String) -> Self {
+    pub fn new(source_name: String) -> Self {
         Self {
             source_name,
+            // TODO do we need the content?
             content: "".to_string(),
             functions: HashMap::default(),
             contracts: HashMap::default(),

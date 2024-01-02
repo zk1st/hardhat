@@ -2,20 +2,20 @@ use std::sync::Arc;
 
 use super::source_location::SourceLocation;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Function {
     FreeFunction(FreeFunction),
     ContractFunction(ContractFunction),
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct FreeFunction {
     pub name: String,
     pub location: SourceLocation,
 }
 
 // Note: Some of these have Arc because we share them between contracts
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum ContractFunction {
     Constructor(Arc<AnonymousContractFunction>),
     Fallback(Arc<AnonymousContractFunction>),
@@ -26,13 +26,13 @@ pub enum ContractFunction {
     InternalFunction(InternalContractFunction),
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct AnonymousContractFunction {
     pub location: SourceLocation,
     pub public: bool,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct PublicContractFunction {
     pub name: String,
     pub location: SourceLocation,
@@ -45,7 +45,7 @@ pub struct PublicContractFunction {
     pub method_identifier: String,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct InternalContractFunction {
     pub name: String,
     pub location: SourceLocation,

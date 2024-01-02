@@ -1,2 +1,2 @@
 mod model;
-mod solc;
+pub mod solc;

@@ -86,14 +86,14 @@ impl PublicFunctionsMap {
     /// function is not overloaded.
     pub fn get_function_selector(
         &self,
-        source_name: &String,
-        contract_name: &String,
-        function_name: &String,
+        source_name: &str,
+        contract_name: &str,
+        function_name: &str,
         parameters_count: Option<usize>,
-        hex_selector: Option<&String>,
+        hex_selector: Option<String>,
     ) -> Option<[u8; 4]> {
         hex_selector
-            .and_then(parse_hex_function_selector)
+            .and_then(|selector| parse_hex_function_selector(&selector))
             .or_else(|| {
                 self.inner
                     .get(source_name)
@@ -124,9 +124,9 @@ impl PublicFunctionsMap {
     /// Returns the method identifier of a function if possible.
     pub fn get_method_identifier(
         &self,
-        source_name: &String,
-        contract_name: &String,
-        function_name: &String,
+        source_name: &str,
+        contract_name: &str,
+        function_name: &str,
         selector: &[u8; 4],
     ) -> Option<String> {
         self.inner

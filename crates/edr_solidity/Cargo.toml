@@ -9,3 +9,4 @@ serde_json = { version = "1.0.89" }
 hex = { version = "0.4.3", default-features = false, features = ["alloc"] }
 alloy-json-abi = "0.5.2"
 thiserror = { version = "1.0.38", default-features = false }
+versions = "6.0.0"
