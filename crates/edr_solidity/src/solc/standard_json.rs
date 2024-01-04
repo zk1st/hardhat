@@ -113,12 +113,11 @@ mod tests {
         let crate_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let artifacts_path = crate_root.join("../../packages/hardhat-core/test/internal/hardhat-network/stack-traces/test-files/artifacts");
 
-        if !artifacts_path.exists() {
-            println!(
-                "Skipping test_deserialize_output because the test files haven't been compiled yet."
-            );
-            return;
-        }
+        assert!(
+            artifacts_path.exists(),
+            "artifacts path doesn't exist: {:?}",
+            artifacts_path
+        );
 
         visit_dirs(artifacts_path.as_path(), &|path| {
             let file_name = path.file_name().unwrap().to_str().unwrap();
