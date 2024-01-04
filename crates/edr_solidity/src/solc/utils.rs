@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use super::ast::{self, ContractKind};
+use super::ast::ContractKind;
 use crate::model::{AnonymousContractFunction, ContractType, SourceLocation};
 
 #[derive(Debug)]
@@ -36,7 +36,7 @@ pub fn contract_kind_to_contract_type(contract_kind: &ContractKind) -> Option<Co
     }
 }
 
-pub fn parse_ast_src_location(src_location: &ast::SourceLocation) -> SourceLocation {
+pub fn parse_ast_src_location(src_location: &str) -> SourceLocation {
     let values: Vec<&str> = src_location.split(':').collect();
 
     let invalid_location_msg =

@@ -31,7 +31,7 @@ pub fn uncompress_source_maps(raw_source_maps: &str) -> Vec<SourceMap> {
     for raw_source_map in raw_source_maps.split(';') {
         let raw_parts: Vec<&str> = raw_source_map.split(':').collect();
 
-        let offset = raw_parts.get(0).and_then(|part| part.parse::<u32>().ok());
+        let offset = raw_parts.first().and_then(|part| part.parse::<u32>().ok());
         let length = raw_parts.get(1).and_then(|part| part.parse::<u32>().ok());
         let file = raw_parts.get(2).and_then(|part| part.parse::<u32>().ok());
         let jump_type = raw_parts
@@ -52,7 +52,7 @@ pub fn uncompress_source_maps(raw_source_maps: &str) -> Vec<SourceMap> {
             jump_type: jump_type.unwrap_or(last_source_map.jump_type),
         };
 
-        last_source_map = source_map.clone();
+        last_source_map = source_map;
         source_maps.push(source_map);
     }
 

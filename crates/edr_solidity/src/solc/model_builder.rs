@@ -20,26 +20,36 @@ use crate::model::{
     SourceFile,
 };
 
+/// Errors that can happen while building the model
 #[derive(Error, Debug)]
 pub enum ModelBuilderError {
+    /// Failed to parse the compiler input
     #[error("Failed to parse the compiler input")]
     CompilerInputParseError,
+    /// Failed to parse the compiler output
     #[error("Failed to parse the compiler output")]
     CompilerOutputParseError,
+    /// Couldn't find source file in the compilation input
     #[error("Couldn't find source file \"{0}\" in the compilation input")]
     SourceFileNotFound(String),
+    /// Couldn't compute the selector for a public function
     #[error("Couldn't compute the selector for {0}:{1}#{2}. This doesn't happen in solc >= 0.6.0 or if you don't use overloads")]
     SelectorError(String, String, String),
+    /// Couldn't compute a method identifier
     #[error("Couldn't compute the method identifier for {0}:{1}#{2}.")]
     MethodIdentifierError(String, String, String),
+    /// Couldn't find the base contract for a contract
     #[error("Couldn't find base contract {0}")]
     BaseContractNotFound(u32),
+    /// Couldn't find base contract's function for a contract
     #[error("Couldn't find base contract's function {0}")]
     BaseContractFunctionNotFound(u32),
+    /// Couldn't parse a bytecode
     #[error("Couldn't parse bytecode {0}")]
     BytecodeParseError(String),
 }
 
+/// Builds a codebase model from the compiler input and output
 pub fn build_model(
     solc_version: SemVer,
     solc_input: &str,
@@ -98,6 +108,10 @@ pub fn build_model(
         )?;
     }
 
+    // Disabling mutable_key_type because `Bytecode` has a `Bytes` field, which is
+    // known to cause false positives for this rule.
+    // See https://rust-lang.github.io/rust-clippy/master/index.html#/mutable_key_type
+    #[allow(clippy::mutable_key_type)]
     let mut bytecodes = HashSet::new();
     for (source_name, contracts) in &compiler_output.contracts {
         for (contract_name, contract_output) in contracts {
@@ -334,15 +348,28 @@ fn add_function_from_contract_function_definition(
     let function = match function_definition.kind {
         ast::FunctionKind::Function => match function_definition.visibility {
             ast::Visibility::External | ast::Visibility::Public => {
+                let selector = try_build_public_contract_function_selector(
+                    public_functions_map,
+                    &source_name,
+                    &contract_name,
+                    &function_definition.name,
+                    Some(function_definition.parameters.parameters.len()),
+                    function_definition.function_selector.clone(),
+                )?;
+
+                let method_identifier = try_build_public_contract_function_method_identifier(
+                    public_functions_map,
+                    &source_name,
+                    &contract_name,
+                    &function_definition.name,
+                    selector,
+                )?;
                 ContractFunction::PublicFunction(Arc::new(
                     try_build_public_contract_function_model(
-                        public_functions_map,
-                        &source_name,
-                        &contract_name,
                         &function_definition.src,
                         &function_definition.name,
-                        Some(function_definition.parameters.parameters.len()),
-                        function_definition.function_selector.clone(),
+                        selector,
+                        &method_identifier,
                         function_definition.state_mutability == ast::StateMutability::Payable,
                     )?,
                 ))
@@ -394,17 +421,15 @@ fn build_anonymous_contract_function_model(
     }
 }
 
-fn try_build_public_contract_function_model(
+fn try_build_public_contract_function_selector(
     public_functions_map: &PublicFunctionsMap,
     source_name: &str,
     contract_name: &str,
-    src: &ast::SourceLocation,
     function_name: &str,
     parameters_count: Option<usize>,
     hex_selector: Option<String>,
-    payable: bool,
-) -> Result<PublicContractFunction, ModelBuilderError> {
-    let selector = public_functions_map
+) -> Result<[u8; 4], ModelBuilderError> {
+    public_functions_map
         .get_function_selector(
             source_name,
             contract_name,
@@ -416,22 +441,38 @@ fn try_build_public_contract_function_model(
             source_name.to_string(),
             function_name.to_string(),
             contract_name.to_string(),
-        ))?;
+        ))
+}
 
-    let method_identifier = public_functions_map
+fn try_build_public_contract_function_method_identifier(
+    public_functions_map: &PublicFunctionsMap,
+    source_name: &str,
+    contract_name: &str,
+    function_name: &str,
+    selector: [u8; 4],
+) -> Result<String, ModelBuilderError> {
+    public_functions_map
         .get_method_identifier(source_name, contract_name, function_name, &selector)
         .ok_or(ModelBuilderError::MethodIdentifierError(
             source_name.to_string(),
             function_name.to_string(),
             contract_name.to_string(),
-        ))?;
+        ))
+}
 
+fn try_build_public_contract_function_model(
+    src: &str,
+    function_name: &str,
+    selector: [u8; 4],
+    method_identifier: &str,
+    payable: bool,
+) -> Result<PublicContractFunction, ModelBuilderError> {
     Ok(PublicContractFunction {
         name: function_name.to_string(),
         location: parse_ast_src_location(src),
         payable,
         selector,
-        method_identifier,
+        method_identifier: method_identifier.to_string(),
     })
 }
 
@@ -457,17 +498,31 @@ fn add_function_from_public_variable_declaration(
     contract_name: &str,
     variable_declaration: &ast::VariableDeclaration,
 ) -> Result<(), ModelBuilderError> {
+    let selector = try_build_public_contract_function_selector(
+        public_functions_map,
+        source_name,
+        contract_name,
+        &variable_declaration.name,
+        None,
+        None,
+    )?;
+
+    let method_identifier = try_build_public_contract_function_method_identifier(
+        public_functions_map,
+        source_name,
+        contract_name,
+        &variable_declaration.name,
+        selector,
+    )?;
+
     functions.insert(
         variable_declaration.id,
         Arc::new(Function::ContractFunction(ContractFunction::Getter(
             Arc::new(try_build_public_contract_function_model(
-                public_functions_map,
-                source_name,
-                contract_name,
                 &variable_declaration.src,
                 &variable_declaration.name,
-                None,
-                None,
+                selector,
+                &method_identifier,
                 false,
             )?),
         ))),
