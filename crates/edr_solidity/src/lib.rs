@@ -1,4 +1,4 @@
-#![warn(missing_docs)]
+// TODO re-enable #![warn(missing_docs)]
 //! Repository of information about contracts written in Solidity.
 
 /// Model of the project's codebase
@@ -9,6 +9,8 @@ pub mod contracts_identifier;
 
 /// Model of solc's input and output
 pub mod solc;
+
+pub mod traces;
 
 mod model;
 mod opcodes;
