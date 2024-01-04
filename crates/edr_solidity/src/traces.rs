@@ -7,12 +7,12 @@ use crate::model::Contract;
 
 struct EVMTraceOpcodeStep {
     pc: usize,
-    instruction: u8
+    instruction: u8,
 }
 
 enum EVMTraceStep {
     EVMStep(EVMTraceOpcodeStep),
-    CallStep(EVMTrace)
+    CallStep(EVMTrace),
 }
 
 pub struct EVMTrace {
@@ -57,19 +57,79 @@ enum InferredRevertReason {
 
 #[cfg(test)]
 mod tests {
-    use std::{path::PathBuf, fs};
+    use std::{fs, path::PathBuf};
 
-    use edr_eth::Address;
-    use revm::primitives::Output;
-    use revm::primitives::ruint::aliases::B160;
+    use anyhow::Context;
+    use edr_eth::{transaction::TransactionRequestAndSender, Address};
+    use edr_provider::{
+        data::ProviderData,
+        test_utils::{create_test_config, InspectorCallbacksStub},
+        ProviderConfig,
+    };
+    use parking_lot::Mutex;
+    use revm::primitives::{ruint::aliases::B160, Output};
+    use tokio::runtime;
     use versions::SemVer;
 
+    use super::*;
     use crate::solc::{
         model_builder::build_model,
         standard_json::{CompilerInput, CompilerOutput},
     };
 
-    use super::*;
+    struct ProviderTestFixture {
+        provider_data: ProviderData,
+        console_log_calls: Arc<Mutex<Vec<Bytes>>>,
+    }
+
+    impl ProviderTestFixture {
+        fn new() -> anyhow::Result<Self> {
+            // Pushes the console.log calls to a vector
+            let callbacks = Box::<InspectorCallbacksStub>::default();
+            let console_log_calls = callbacks.console_log_calls.clone();
+
+            let cache_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(edr_defaults::CACHE_DIR);
+            let config = create_test_config(cache_dir);
+
+            let config = ProviderConfig::try_from(config)?;
+            // Assumes that this is invoked from a tokio runtime. This means that tests
+            // should be ran with [tokio::test] attribute.
+            let runtime = runtime::Handle::current();
+
+            let mut provider_data = ProviderData::new(runtime, callbacks, config)?;
+
+            Ok(Self {
+                provider_data,
+                console_log_calls,
+            })
+        }
+
+        fn run_transaction(
+            &mut self,
+            transaction_request: TransactionRequestAndSender,
+        ) -> anyhow::Result<(ExecutionResult, Vec<Bytes>)> {
+            // Emulates automining behaviour without snapshot logic which is unnecessary
+            // because each test has its owned provider fixture.
+            let signed_transaction = self
+                .provider_data
+                .sign_transaction_request(transaction_request)?;
+
+            let tx_hash = self
+                .provider_data
+                .add_pending_transaction(signed_transaction)?;
+
+            let execution_result = self
+                .provider_data
+                .mine_and_commit_block_for_transaction(&tx_hash)?
+                .context("Transaction was mined")?;
+
+            // Remove the console logs collected during this execution and replace with an
+            // empty vec.
+            let console_logs = std::mem::take(&mut *self.console_log_calls.lock());
+
+            Ok((execution_result, console_logs))
+        }
+    }
 
     enum TestTransactionTo {
         Address(Address),
@@ -103,11 +163,17 @@ mod tests {
     }
 
     // return evm trace and console logs
-    fn run_test_step(step: &TestStep, current_steps_results: &Vec<Option<Address>>) -> (EVMTrace, Vec<String>) {
+    fn run_test_step(
+        step: &TestStep,
+        current_steps_results: &Vec<Option<Address>>,
+    ) -> (EVMTrace, Vec<String>) {
         let to_address: Option<Address> = match step.transaction.to {
             Some(TestTransactionTo::Address(address)) => Some(address),
             Some(TestTransactionTo::Contract(step_index)) => {
-                if let Some(address) = current_steps_results.get(step_index as usize).expect("Invalid step index") {
+                if let Some(address) = current_steps_results
+                    .get(step_index as usize)
+                    .expect("Invalid step index")
+                {
                     Some(address.clone())
                 } else {
                     panic!("Contract address not found in previous steps results")
@@ -119,31 +185,25 @@ mod tests {
         run_transaction(&step.transaction.data, to_address)
     }
 
-    fn create_edr_instance() {
-        let crate_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let unusedCacheDir = crate_root.join("test/cache-dir");
-
-        // copy test config creation function from edr_provider/src/test_utils.rs
-
-        let config = edr_provider::ProviderConfig::try_from(config)?;
-        let runtime = runtime::Handle::current();
-
-    }
-
     // Temporary function to run a stack trace test and get
     // the stack trace and the console logs.
-    fn run_stack_trace_test(test: Test) {
+    fn run_stack_trace_test(test: Test) -> anyhow::Result<()> {
+        let edr_instance = ProviderTestFixture::new()?;
 
-        let edr_instance = create_edr_instance();
-
-        // TODO create edr instance
         let codebase_model = build_model(test.solc_version, &test.solc_input, &test.solc_output);
         let mut steps_results: Vec<Option<Address>> = Vec::new();
 
         for step in test.steps {
             let (evm_trace, console_logs) = run_test_step(&step, &steps_results);
 
-            if let ExecutionResult::Success { reason, gas_used, gas_refunded, logs, output } = evm_trace.execution_result {
+            if let ExecutionResult::Success {
+                reason,
+                gas_used,
+                gas_refunded,
+                logs,
+                output,
+            } = evm_trace.execution_result
+            {
                 if let Output::Create(_, Some(deployed_contract_address)) = output {
                     let address = Address::from(deployed_contract_address.0);
                     steps_results.push(Some(address));
@@ -154,16 +214,20 @@ mod tests {
                 steps_results.push(None);
             }
         }
+
+        Ok(())
     }
 
-    #[test]
-    fn test_deploy_contract_and_call_function() {
+    #[tokio::test]
+    async fn test_deploy_contract_and_call_function() -> anyhow::Result<()> {
         let crate_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let solc_input_path = crate_root.join("test/console-log-uint-solc-input.json");
         let solc_output_path = crate_root.join("test/console-log-uint-solc-output.json");
 
-        let solc_input = fs::read_to_string(solc_input_path).expect("Unable to read solc input file");
-        let solc_output = fs::read_to_string(solc_output_path).expect("Unable to read solc output file");
+        let solc_input =
+            fs::read_to_string(solc_input_path).context("Unable to read solc input file")?;
+        let solc_output =
+            fs::read_to_string(solc_output_path).context("Unable to read solc output file")?;
 
         let mut steps = Vec::new();
 
@@ -193,7 +257,7 @@ mod tests {
         steps.push(TestStep {
             transaction: TestTransaction {
                 to: Some(TestTransactionTo::Contract(0)),
-                data: hex::decode("51973ec9").unwrap().into()
+                data: hex::decode("51973ec9").unwrap().into(),
             },
             expected: None,
         });

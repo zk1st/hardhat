@@ -2,7 +2,7 @@ use std::{path::PathBuf, time::SystemTime};
 
 use edr_eth::{
     block::BlobGas, signature::secret_key_from_str, trie::KECCAK_NULL_RLP, AccountInfo, Address,
-    SpecId, U256,
+    Bytes, SpecId, U256,
 };
 use edr_evm::{alloy_primitives::U160, KECCAK_EMPTY};
 use edr_test_utils::env::get_alchemy_url;
@@ -14,6 +14,17 @@ pub const TEST_SECRET_KEY: &str =
     "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
 
 pub const FORK_BLOCK_NUMBER: u64 = 18_725_000;
+
+#[derive(Clone, Debug, Default)]
+pub struct InspectorCallbacksStub {
+    pub console_log_calls: Arc<Mutex<Vec<Bytes>>>,
+}
+
+impl InspectorCallbacks for InspectorCallbacksStub {
+    fn console(&self, call_input: Bytes) {
+        self.console_log_calls.lock().push(call_input);
+    }
+}
 
 /// Constructs a test config with a single account with 1 ether
 pub fn create_test_config(cache_dir: PathBuf) -> ProviderConfig {

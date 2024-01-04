@@ -189,6 +189,24 @@ impl ProviderData {
         self.local_accounts.keys()
     }
 
+    pub fn add_pending_transaction(
+        &mut self,
+        transaction: PendingTransaction,
+    ) -> Result<B256, ProviderError> {
+        let transaction_hash = *transaction.hash();
+
+        // Handles validation
+        self.mem_pool.add_transaction(&self.state, transaction)?;
+
+        for filter in self.filters.values_mut() {
+            if let FilteredEvents::NewPendingTransactions(events) = &mut filter.events {
+                events.push(transaction_hash);
+            }
+        }
+
+        Ok(transaction_hash)
+    }
+
     /// Returns whether the miner is mining automatically.
     pub fn is_auto_mining(&self) -> bool {
         self.is_auto_mining
@@ -532,6 +550,30 @@ impl ProviderData {
         })
     }
 
+    /// Mine and commit a block and return the execution result for a
+    /// transaction.
+    pub fn mine_and_commit_block_for_transaction(
+        &mut self,
+        transaction_hash: &B256,
+    ) -> Result<Option<ExecutionResult>, ProviderError> {
+        let mine_result = self.mine_and_commit_block(None)?;
+
+        let execution_result = mine_result
+            .block
+            .transactions()
+            .iter()
+            .enumerate()
+            .find_map(|(idx, transaction)| {
+                if transaction.hash() == transaction_hash {
+                    Some(mine_result.transaction_results[idx].clone())
+                } else {
+                    None
+                }
+            });
+
+        Ok(execution_result)
+    }
+
     pub fn network_id(&self) -> String {
         self.initial_config.network_id.to_string()
     }
@@ -764,21 +806,13 @@ impl ProviderData {
 
         if let Some(snapshot_id) = snapshot_id {
             let transaction_result = loop {
-                let result = self.mine_and_commit_block(None).map_err(|error| {
-                    self.revert_to_snapshot(snapshot_id);
+                let transaction_result = self
+                    .mine_and_commit_block_for_transaction(&tx_hash)
+                    .map_err(|error| {
+                        self.revert_to_snapshot(snapshot_id);
 
-                    error
-                })?;
-
-                let transaction_result = result.block.transactions().iter().enumerate().find_map(
-                    |(idx, transaction)| {
-                        if *transaction.hash() == tx_hash {
-                            Some(result.transaction_results[idx].clone())
-                        } else {
-                            None
-                        }
-                    },
-                );
+                        error
+                    })?;
 
                 if let Some(transaction_result) = transaction_result {
                     break transaction_result;
@@ -996,6 +1030,34 @@ impl ProviderData {
         }
     }
 
+    pub fn sign_transaction_request(
+        &self,
+        transaction_request: TransactionRequestAndSender,
+    ) -> Result<PendingTransaction, ProviderError> {
+        let TransactionRequestAndSender { request, sender } = transaction_request;
+
+        if self.impersonated_accounts.contains(&sender) {
+            let signed_transaction = request.fake_sign(&sender);
+
+            Ok(PendingTransaction::with_caller(
+                self.blockchain.spec_id(),
+                signed_transaction,
+                sender,
+            )?)
+        } else {
+            let secret_key = self
+                .local_accounts
+                .get(&sender)
+                .ok_or(ProviderError::UnknownAddress { address: sender })?;
+
+            let signed_transaction = request.sign(secret_key)?;
+            Ok(PendingTransaction::new(
+                self.blockchain.spec_id(),
+                signed_transaction,
+            )?)
+        }
+    }
+
     pub fn spec_id(&self) -> SpecId {
         self.blockchain.spec_id()
     }
@@ -1054,23 +1116,6 @@ impl ProviderData {
         Ok(transaction)
     }
 
-    fn add_pending_transaction(
-        &mut self,
-        transaction: PendingTransaction,
-    ) -> Result<B256, ProviderError> {
-        let transaction_hash = *transaction.hash();
-
-        // Handles validation
-        self.mem_pool.add_transaction(&self.state, transaction)?;
-
-        for filter in self.filters.values_mut() {
-            if let FilteredEvents::NewPendingTransactions(events) = &mut filter.events {
-                events.push(transaction_hash);
-            }
-        }
-
-        Ok(transaction_hash)
-    }
     fn evm_inspector(&self) -> EvmInspector<'_> {
         EvmInspector::new(&*self.callbacks)
     }
@@ -1231,34 +1276,6 @@ impl ProviderData {
             filter.is_subscription == IS_SUBSCRIPTION && self.filters.remove(filter_id).is_some()
         } else {
             false
-        }
-    }
-
-    fn sign_transaction_request(
-        &self,
-        transaction_request: TransactionRequestAndSender,
-    ) -> Result<PendingTransaction, ProviderError> {
-        let TransactionRequestAndSender { request, sender } = transaction_request;
-
-        if self.impersonated_accounts.contains(&sender) {
-            let signed_transaction = request.fake_sign(&sender);
-
-            Ok(PendingTransaction::with_caller(
-                self.blockchain.spec_id(),
-                signed_transaction,
-                sender,
-            )?)
-        } else {
-            let secret_key = self
-                .local_accounts
-                .get(&sender)
-                .ok_or(ProviderError::UnknownAddress { address: sender })?;
-
-            let signed_transaction = request.sign(secret_key)?;
-            Ok(PendingTransaction::new(
-                self.blockchain.spec_id(),
-                signed_transaction,
-            )?)
         }
     }
 
@@ -1528,11 +1545,10 @@ mod tests {
 
     use super::*;
     use crate::{
-        data::inspector::tests::{
-            deploy_console_log_contract, ConsoleLogTransaction, InspectorCallbacksStub,
-        },
+        data::inspector::tests::{deploy_console_log_contract, ConsoleLogTransaction},
         test_utils::{
-            create_test_config_with_impersonated_accounts_and_fork, one_ether, FORK_BLOCK_NUMBER,
+            create_test_config_with_impersonated_accounts_and_fork, one_ether,
+            InspectorCallbacksStub, FORK_BLOCK_NUMBER,
         },
         ProviderConfig,
     };

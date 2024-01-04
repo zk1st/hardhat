@@ -52,8 +52,6 @@ impl<'callbacks, DatabaseErrorT> Inspector<DatabaseErrorT> for EvmInspector<'cal
 
 #[cfg(test)]
 pub(crate) mod tests {
-    use std::sync::Arc;
-
     use anyhow::Context;
     use edr_eth::{
         transaction::{
@@ -63,20 +61,8 @@ pub(crate) mod tests {
         Bytes, U256,
     };
     use edr_evm::hex;
-    use parking_lot::Mutex;
 
-    use crate::data::{InspectorCallbacks, ProviderData};
-
-    #[derive(Clone, Debug, Default)]
-    pub struct InspectorCallbacksStub {
-        pub console_log_calls: Arc<Mutex<Vec<Bytes>>>,
-    }
-
-    impl InspectorCallbacks for InspectorCallbacksStub {
-        fn console(&self, call_input: Bytes) {
-            self.console_log_calls.lock().push(call_input);
-        }
-    }
+    use crate::data::ProviderData;
 
     pub struct ConsoleLogTransaction {
         pub transaction: TransactionRequestAndSender,

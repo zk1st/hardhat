@@ -1,5 +1,5 @@
 mod config;
-mod data;
+pub mod data;
 mod error;
 mod filter;
 mod interval;
@@ -8,7 +8,7 @@ mod pending;
 mod requests;
 mod snapshot;
 /// Test utilities
-#[cfg(test)]
+#[cfg(any(feature = "test_utils", test))]
 pub mod test_utils;
 
 use std::sync::Arc;
