@@ -265,7 +265,14 @@ mod tests {
     }
 
     fn create_test_bytecode(normalized_code: Bytes) -> Bytecode {
-        Bytecode::new(None, BytecodeType::Runtime, normalized_code, vec![], vec![])
+        Bytecode::new(
+            None,
+            BytecodeType::Runtime,
+            normalized_code,
+            vec![],
+            vec![],
+            None,
+        )
     }
 
     fn create_test_bytecode_with_libraries_and_immutable_references(
@@ -279,6 +286,7 @@ mod tests {
             normalized_code,
             library_offsets,
             immutable_references,
+            None,
         )
     }
 
@@ -289,6 +297,7 @@ mod tests {
             normalized_code,
             vec![],
             vec![],
+            None,
         )
     }
 

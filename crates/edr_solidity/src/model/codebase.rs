@@ -29,7 +29,7 @@ pub enum LookupResult {
 impl Codebase {
     #[allow(dead_code)]
     fn lookup(&self, location: &SourceLocation) -> Option<Arc<Function>> {
-        let source_file = self.source_files.get(&location.file)?;
+        let source_file = self.source_files.get(&location.file?)?;
 
         let function = source_file.functions.get(location)?;
 

@@ -1,6 +1,6 @@
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 pub struct SourceLocation {
-    pub file: u32,
+    pub file: Option<u32>,
     pub offset: u32,
     pub length: u32,
 }

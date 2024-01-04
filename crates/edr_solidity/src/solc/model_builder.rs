@@ -120,6 +120,7 @@ pub fn build_model(
                 normalized_code,
                 library_offsets,
                 immutable_references,
+                Some(&contract_output.evm.deployed_bytecode.source_map),
             );
 
             let (normalized_code, library_offsets, immutable_references) =
@@ -131,6 +132,7 @@ pub fn build_model(
                 normalized_code,
                 library_offsets,
                 immutable_references,
+                Some(&contract_output.evm.bytecode.source_map),
             );
 
             bytecodes.insert(runtime_bytecode);

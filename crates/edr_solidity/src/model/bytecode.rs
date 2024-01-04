@@ -3,7 +3,8 @@ use std::{collections::HashMap, sync::Arc};
 use edr_eth::Bytes;
 use revm::interpreter::OpCode;
 
-use super::{source_map::SourceMap, Contract};
+use super::{source_map::SourceMap, uncompress_source_maps, Contract};
+use crate::opcodes::opcode_length;
 
 #[derive(Debug, PartialEq)]
 pub enum BytecodeType {
@@ -34,15 +35,18 @@ impl Bytecode {
         normalized_code: Bytes,
         library_offsets: Vec<usize>,
         immutable_references: Vec<ImmutableReference>,
+        raw_source_maps: Option<&str>,
     ) -> Self {
+        let uncompressed_source_maps = uncompress_source_maps(raw_source_maps.unwrap_or_default());
+        let pc_to_source_maps = build_pc_to_source_maps(&normalized_code, uncompressed_source_maps);
+
         Self {
             contract,
             bytecode_type,
             normalized_code,
             library_offsets,
             immutable_references,
-            // TODO
-            pc_to_source_maps: HashMap::new(),
+            pc_to_source_maps,
         }
     }
 
@@ -78,4 +82,24 @@ impl std::hash::Hash for Bytecode {
 pub struct Instruction {
     pub opcode: OpCode,
     pub source_map: Option<SourceMap>,
+}
+
+fn build_pc_to_source_maps(
+    normalized_code: &Bytes,
+    uncompressed_source_maps: Vec<SourceMap>,
+) -> HashMap<usize, SourceMap> {
+    let mut pc_to_source_maps = HashMap::new();
+
+    let mut bytes_index = 0;
+    for (instruction_offset, source_map) in uncompressed_source_maps.into_iter().enumerate() {
+        pc_to_source_maps.insert(bytes_index, source_map);
+
+        let opcode = normalized_code
+            .get(instruction_offset)
+            .expect("the number of source maps is bigger than the length of the bytecode");
+
+        bytes_index += opcode_length(*opcode);
+    }
+
+    pc_to_source_maps
 }

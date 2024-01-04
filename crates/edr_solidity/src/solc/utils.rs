@@ -45,7 +45,7 @@ pub fn parse_ast_src_location(src_location: &ast::SourceLocation) -> SourceLocat
     assert!(values.len() >= 3, "{invalid_location_msg}");
 
     SourceLocation {
-        file: values[2].parse().expect(&invalid_location_msg),
+        file: Some(values[2].parse().expect(&invalid_location_msg)),
         offset: values[0].parse().expect(&invalid_location_msg),
         length: values[1].parse().expect(&invalid_location_msg),
     }
