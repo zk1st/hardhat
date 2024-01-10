@@ -14,6 +14,7 @@ use crate::{
     mempool::OrderedTransaction,
     state::{StateDiff, SyncState},
     trace::Trace,
+    tracing_inspector::{CallTraceNode, TracingInspectorConfig},
     BlockBuilder, BlockTransactionError, BuildBlockResult, LocalBlock, MemPool, PendingTransaction,
     SyncBlock,
 };
@@ -29,6 +30,17 @@ pub struct MineBlockResult<BlockchainErrorT> {
     pub transaction_traces: Vec<Trace>,
 }
 
+/// The result of mining a block, after having been committed to the blockchain.
+#[derive(Debug)]
+pub struct MineBlockResultWithCallTraces<BlockchainErrorT> {
+    /// Mined block
+    pub block: Arc<dyn SyncBlock<Error = BlockchainErrorT>>,
+    /// Transaction results
+    pub transaction_results: Vec<ExecutionResult>,
+    /// Transaction traces
+    pub transaction_traces: Vec<Vec<CallTraceNode>>,
+}
+
 /// The result of mining a block, including the state. This result needs to be
 /// inserted into the blockchain to be persistent.
 pub struct MineBlockResultAndState<StateErrorT> {
@@ -42,6 +54,21 @@ pub struct MineBlockResultAndState<StateErrorT> {
     pub transaction_results: Vec<ExecutionResult>,
     /// Transaction traces
     pub transaction_traces: Vec<Trace>,
+}
+
+/// The result of mining a block, including the state. This result needs to be
+/// inserted into the blockchain to be persistent.
+pub struct MineBlockResultAndStateWithCallTraces<StateErrorT> {
+    /// Mined block
+    pub block: LocalBlock,
+    /// State after mining the block
+    pub state: Box<dyn SyncState<StateErrorT>>,
+    /// State diff applied by block
+    pub state_diff: StateDiff,
+    /// Transaction results
+    pub transaction_results: Vec<ExecutionResult>,
+    /// Transaction traces
+    pub transaction_traces: Vec<Vec<CallTraceNode>>,
 }
 
 /// The type of ordering to use when selecting blocks to mine.
@@ -206,6 +233,154 @@ where
         .map_err(MineBlockError::BlockFinalize)?;
 
     Ok(MineBlockResultAndState {
+        block,
+        state,
+        state_diff,
+        transaction_results: results,
+        transaction_traces: traces,
+    })
+}
+
+/// Mines a block using as many transactions as can fit in it.
+#[allow(clippy::too_many_arguments)]
+#[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+pub fn mine_block_with_call_traces<BlockchainErrorT, StateErrorT>(
+    blockchain: &dyn SyncBlockchain<BlockchainErrorT, StateErrorT>,
+    mut state: Box<dyn SyncState<StateErrorT>>,
+    mem_pool: &MemPool,
+    cfg: &CfgEnv,
+    timestamp: u64,
+    beneficiary: Address,
+    min_gas_price: U256,
+    mine_ordering: MineOrdering,
+    reward: U256,
+    base_fee: Option<U256>,
+    prevrandao: Option<B256>,
+    call_trace_config: TracingInspectorConfig,
+    inspector: Option<&mut dyn SyncInspector<BlockchainErrorT, StateErrorT>>,
+) -> Result<
+    MineBlockResultAndStateWithCallTraces<StateErrorT>,
+    MineBlockError<BlockchainErrorT, StateErrorT>,
+>
+where
+    BlockchainErrorT: Debug + Send,
+    StateErrorT: Debug + Send,
+{
+    let parent_block = blockchain
+        .last_block()
+        .map_err(MineBlockError::Blockchain)?;
+
+    let parent_header = parent_block.header();
+    let base_fee = if cfg.spec_id >= SpecId::LONDON {
+        Some(base_fee.unwrap_or_else(|| calculate_next_base_fee(parent_header)))
+    } else {
+        None
+    };
+
+    let mut block_builder = BlockBuilder::new(
+        cfg.clone(),
+        parent_header,
+        BlockOptions {
+            beneficiary: Some(beneficiary),
+            number: Some(parent_header.number + 1),
+            gas_limit: Some(mem_pool.block_gas_limit()),
+            timestamp: Some(timestamp),
+            mix_hash: if cfg.spec_id >= SpecId::MERGE {
+                Some(prevrandao.ok_or(MineBlockError::MissingPrevrandao)?)
+            } else {
+                None
+            },
+            nonce: Some(if cfg.spec_id >= SpecId::MERGE {
+                B64::ZERO
+            } else {
+                B64::from(66u64)
+            }),
+            base_fee,
+            ..Default::default()
+        },
+    )?;
+
+    let mut pending_transactions = {
+        type MineOrderComparator =
+            dyn Fn(&OrderedTransaction, &OrderedTransaction) -> Ordering + Send;
+
+        let comparator: Box<MineOrderComparator> = match mine_ordering {
+            MineOrdering::Fifo => Box::new(|lhs, rhs| lhs.order_id().cmp(&rhs.order_id())),
+            MineOrdering::Priority => Box::new(move |lhs, rhs| {
+                let effective_miner_fee = |transaction: &PendingTransaction| {
+                    let max_fee_per_gas = transaction.gas_price();
+                    let max_priority_fee_per_gas = transaction
+                        .max_priority_fee_per_gas()
+                        .unwrap_or(max_fee_per_gas);
+
+                    base_fee.map_or(max_fee_per_gas, |base_fee| {
+                        max_priority_fee_per_gas.min(max_fee_per_gas - base_fee)
+                    })
+                };
+
+                // Invert lhs and rhs to get decreasing order by effective miner fee
+                let ordering =
+                    effective_miner_fee(rhs.pending()).cmp(&effective_miner_fee(lhs.pending()));
+
+                // If two txs have the same effective miner fee we want to sort them
+                // in increasing order by orderId
+                if ordering == Ordering::Equal {
+                    lhs.order_id().cmp(&rhs.order_id())
+                } else {
+                    ordering
+                }
+            }),
+        };
+
+        mem_pool.iter(comparator)
+    };
+
+    let mut results = Vec::new();
+    let mut traces = Vec::new();
+
+    let mut container = InspectorContainer::with_call_traces(call_trace_config, inspector);
+    while let Some(transaction) = pending_transactions.next() {
+        if transaction.gas_price() < min_gas_price {
+            pending_transactions.remove_caller(transaction.caller());
+            continue;
+        }
+
+        let caller = *transaction.caller();
+        match block_builder.add_transaction(
+            blockchain,
+            &mut state,
+            transaction,
+            container.as_dyn_inspector(),
+        ) {
+            Err(
+                BlockTransactionError::ExceedsBlockGasLimit
+                | BlockTransactionError::InvalidTransaction(
+                    InvalidTransaction::GasPriceLessThanBasefee,
+                ),
+            ) => {
+                pending_transactions.remove_caller(&caller);
+                continue;
+            }
+            Err(e) => {
+                return Err(MineBlockError::BlockTransaction(e));
+            }
+            Ok(result) => {
+                results.push(result);
+                traces.push(
+                    container
+                        .clear_call_trace()
+                        .expect("we are using a call tracer"),
+                );
+            }
+        }
+    }
+
+    let rewards = vec![(beneficiary, reward)];
+    let BuildBlockResult { block, state_diff } = block_builder
+        .finalize(&mut state, rewards, None)
+        .map_err(MineBlockError::BlockFinalize)?;
+
+    Ok(MineBlockResultAndStateWithCallTraces {
         block,
         state,
         state_diff,

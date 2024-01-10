@@ -5,7 +5,7 @@ use edr_eth::{
     transaction::{SignedTransaction, TransactionRequest},
     B256, U256,
 };
-use edr_evm::{trace::Trace, Bytecode, MineBlockResult, SyncBlock};
+use edr_evm::{trace::Trace, Bytecode, MineBlockResultWithCallTraces, SyncBlock};
 
 use crate::ProviderError;
 
@@ -29,7 +29,7 @@ impl Logger {
     /// Logs the result of auto-mining a block.
     pub fn log_block_from_automine<BlockchainErrorT>(
         &self,
-        _result: MineBlockResult<BlockchainErrorT>,
+        _result: MineBlockResultWithCallTraces<BlockchainErrorT>,
         _contracts: Vec<Bytecode>,
         _transaction_hash_to_highlight: &B256,
     ) {
@@ -38,7 +38,7 @@ impl Logger {
     /// Logs the result of mining a block.
     pub fn log_mined_block<BlockchainErrorT>(
         &self,
-        _result: MineBlockResult<BlockchainErrorT>,
+        _result: MineBlockResultWithCallTraces<BlockchainErrorT>,
         _contracts: Vec<Bytecode>,
     ) {
     }
@@ -46,7 +46,7 @@ impl Logger {
     /// Logs the result of interval mining a block.
     pub fn log_interval_mined_block<BlockchainErrorT>(
         &self,
-        _result: &MineBlockResult<BlockchainErrorT>,
+        _result: &MineBlockResultWithCallTraces<BlockchainErrorT>,
         _contracts: Vec<Bytecode>,
     ) {
     }

@@ -1119,6 +1119,7 @@ dependencies = [
  "anyhow",
  "edr_defaults",
  "edr_eth",
+ "edr_evm",
  "edr_provider",
  "hex",
  "parking_lot 0.12.1",

@@ -10,6 +10,7 @@ use revm::{
 use crate::{
     evm::SyncInspector,
     trace::{Trace, TraceCollector},
+    tracing_inspector::{CallTraceNode, TracingInspector, TracingInspectorConfig},
 };
 
 // TODO: Improve this design by introducing a InspectorMut trait
@@ -150,12 +151,22 @@ where
 {
     /// No inspector or tracer.
     None,
+    /// A tracing inspector that can trace calls recursively.
+    CallTracer(TracingInspector),
     /// Only a tracer.
     Collector(TraceCollector),
     /// Both a tracer and an inspector.
     Dual(
         DualInspector<
             TraceCollector,
+            &'inspector mut dyn SyncInspector<BlockchainErrorT, StateErrorT>,
+            DatabaseComponentError<StateErrorT, BlockchainErrorT>,
+        >,
+    ),
+    /// Both a tracer and an inspector.
+    DualCallTracer(
+        DualInspector<
+            TracingInspector,
             &'inspector mut dyn SyncInspector<BlockchainErrorT, StateErrorT>,
             DatabaseComponentError<StateErrorT, BlockchainErrorT>,
         >,
@@ -188,14 +199,32 @@ where
         }
     }
 
+    /// Constructs a new instance with a tracing inspector that collects
+    /// recursive call traces.
+    pub fn with_call_traces(
+        call_trace_options: TracingInspectorConfig,
+        additional_tracer: Option<&'inspector mut dyn SyncInspector<BlockchainErrorT, StateErrorT>>,
+    ) -> Self {
+        if let Some(additional_tracer) = additional_tracer {
+            InspectorContainer::DualCallTracer(DualInspector::new(
+                TracingInspector::new(call_trace_options),
+                additional_tracer,
+            ))
+        } else {
+            InspectorContainer::CallTracer(TracingInspector::new(call_trace_options))
+        }
+    }
+
     /// Returns the inspector, if it exists.
     pub fn as_dyn_inspector(
         &mut self,
     ) -> Option<&mut dyn SyncInspector<BlockchainErrorT, StateErrorT>> {
         match self {
             InspectorContainer::None => None,
+            InspectorContainer::CallTracer(c) => Some(c),
             InspectorContainer::Collector(c) => Some(c),
             InspectorContainer::Dual(d) => Some(d),
+            InspectorContainer::DualCallTracer(d) => Some(d),
             InspectorContainer::Inspector(t) => Some(t),
         }
     }
@@ -203,7 +232,10 @@ where
     /// Returns the tracer, if it exists.
     pub fn into_tracer(self) -> Option<TraceCollector> {
         match self {
-            InspectorContainer::None | InspectorContainer::Inspector(_) => None,
+            InspectorContainer::None
+            | InspectorContainer::Inspector(_)
+            | InspectorContainer::CallTracer(_)
+            | InspectorContainer::DualCallTracer(_) => None,
             InspectorContainer::Collector(c) => Some(c),
             InspectorContainer::Dual(d) => Some(d.into_parts().0),
         }
@@ -212,7 +244,10 @@ where
     /// Clears and returns the trace, if it exists.
     pub fn clear_trace(&mut self) -> Option<Trace> {
         match self {
-            InspectorContainer::None | InspectorContainer::Inspector(_) => None,
+            InspectorContainer::None
+            | InspectorContainer::Inspector(_)
+            | InspectorContainer::CallTracer(_)
+            | InspectorContainer::DualCallTracer(_) => None,
             InspectorContainer::Collector(collector) => {
                 let tracer = std::mem::take(collector);
                 Some(tracer.into_trace())
@@ -221,6 +256,18 @@ where
                 let tracer = std::mem::take(&mut dual.immutable);
                 Some(tracer.into_trace())
             }
+        }
+    }
+
+    /// Clears and returns the trace, if it exists.
+    pub fn clear_call_trace(&mut self) -> Option<Vec<CallTraceNode>> {
+        match self {
+            InspectorContainer::None
+            | InspectorContainer::Inspector(_)
+            | InspectorContainer::Collector(_)
+            | InspectorContainer::Dual(_) => None,
+            InspectorContainer::CallTracer(collector) => Some(collector.reset()),
+            InspectorContainer::DualCallTracer(dual) => Some(dual.immutable.reset()),
         }
     }
 }

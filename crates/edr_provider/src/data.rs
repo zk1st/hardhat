@@ -28,14 +28,16 @@ use edr_evm::{
     },
     calculate_next_base_fee,
     db::StateRef,
-    guaranteed_dry_run, mempool, mine_block,
+    guaranteed_dry_run, mempool, mine_block_with_call_traces,
     state::{
         AccountModifierFn, IrregularState, StateDiff, StateError, StateOverride, StateOverrides,
         SyncState,
     },
+    tracing_inspector::{CallTraceNode, TracingInspectorConfig},
     Account, AccountInfo, BlobExcessGasAndPrice, Block, BlockEnv, Bytecode, CfgEnv,
-    ExecutionResult, HashMap, HashSet, MemPool, MineBlockResult, MineBlockResultAndState,
-    MineOrdering, PendingTransaction, RandomHashGenerator, StorageSlot, SyncBlock, KECCAK_EMPTY,
+    ExecutionResult, HashMap, HashSet, MemPool, MineBlockResultAndStateWithCallTraces,
+    MineBlockResultWithCallTraces, MineOrdering, PendingTransaction, RandomHashGenerator,
+    StorageSlot, SyncBlock, KECCAK_EMPTY,
 };
 use indexmap::IndexMap;
 use inspector::EvmInspector;
@@ -106,6 +108,7 @@ pub struct ProviderData {
     logger: Logger,
     impersonated_accounts: HashSet<Address>,
     callbacks: Box<dyn SyncInspectorCallbacks>,
+    tracing_config: TracingInspectorConfig,
 }
 
 impl ProviderData {
@@ -164,6 +167,7 @@ impl ProviderData {
             logger: Logger::new(false),
             impersonated_accounts: HashSet::new(),
             callbacks,
+            tracing_config: TracingInspectorConfig::none(),
         })
     }
 
@@ -512,7 +516,7 @@ impl ProviderData {
     pub fn mine_and_commit_block(
         &mut self,
         timestamp: Option<u64>,
-    ) -> Result<MineBlockResult<BlockchainError>, ProviderError> {
+    ) -> Result<MineBlockResultWithCallTraces<BlockchainError>, ProviderError> {
         let (block_timestamp, new_offset) = self.next_block_timestamp(timestamp)?;
         let prevrandao = if self.blockchain.spec_id() >= SpecId::MERGE {
             Some(self.prev_randao_generator.next_value())
@@ -543,7 +547,7 @@ impl ProviderData {
 
         self.state = result.state;
 
-        Ok(MineBlockResult {
+        Ok(MineBlockResultWithCallTraces {
             block,
             transaction_results: result.transaction_results,
             transaction_traces: result.transaction_traces,
@@ -555,23 +559,28 @@ impl ProviderData {
     pub fn mine_and_commit_block_for_transaction(
         &mut self,
         transaction_hash: &B256,
-    ) -> Result<Option<ExecutionResult>, ProviderError> {
-        let mine_result = self.mine_and_commit_block(None)?;
+    ) -> Result<Option<(ExecutionResult, Vec<CallTraceNode>)>, ProviderError> {
+        let mut mine_result = self.mine_and_commit_block(None)?;
 
-        let execution_result = mine_result
+        let transaction_index = mine_result
             .block
             .transactions()
             .iter()
-            .enumerate()
-            .find_map(|(idx, transaction)| {
-                if transaction.hash() == transaction_hash {
-                    Some(mine_result.transaction_results[idx].clone())
-                } else {
-                    None
-                }
-            });
+            .position(|tx| tx.hash() == transaction_hash);
 
-        Ok(execution_result)
+        Ok(transaction_index.map(|index| {
+            // let MineBlockResultWithCallTraces {
+            //     transaction_results,
+            //     transaction_traces,
+            //     ..
+            // } = mine_result;
+
+            let transaction_result = mine_result.transaction_results.swap_remove(index);
+            let traces = mine_result.transaction_traces.swap_remove(index);
+
+            // (transaction_results.remove(index), transaction_traces[index])
+            (transaction_result, traces)
+        }))
     }
 
     pub fn network_id(&self) -> String {
@@ -805,7 +814,7 @@ impl ProviderData {
             })?;
 
         if let Some(snapshot_id) = snapshot_id {
-            let transaction_result = loop {
+            let (transaction_result, _) = loop {
                 let transaction_result = self
                     .mine_and_commit_block_for_transaction(&tx_hash)
                     .map_err(|error| {
@@ -1188,7 +1197,7 @@ impl ProviderData {
         &self,
         timestamp: u64,
         prevrandao: Option<B256>,
-    ) -> Result<MineBlockResultAndState<StateError>, ProviderError> {
+    ) -> Result<MineBlockResultAndStateWithCallTraces<StateError>, ProviderError> {
         // TODO: https://github.com/NomicFoundation/edr/issues/156
         let reward = U256::ZERO;
 
@@ -1196,7 +1205,7 @@ impl ProviderData {
 
         let mut inspector = self.evm_inspector();
 
-        let result = mine_block(
+        let result = mine_block_with_call_traces(
             &*self.blockchain,
             self.state.clone(),
             &self.mem_pool,
@@ -1209,6 +1218,7 @@ impl ProviderData {
             reward,
             self.next_block_base_fee_per_gas()?,
             prevrandao,
+            self.tracing_config.clone(),
             Some(&mut inspector),
         )?;
 
@@ -1216,7 +1226,9 @@ impl ProviderData {
     }
 
     /// Mines a pending block, without modifying any values.
-    pub fn mine_pending_block(&self) -> Result<MineBlockResultAndState<StateError>, ProviderError> {
+    pub fn mine_pending_block(
+        &self,
+    ) -> Result<MineBlockResultAndStateWithCallTraces<StateError>, ProviderError> {
         let (block_timestamp, _new_offset) = self.next_block_timestamp(None)?;
         let prevrandao = if self.blockchain.spec_id() >= SpecId::MERGE {
             Some(self.prev_randao_generator.seed())

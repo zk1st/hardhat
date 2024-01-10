@@ -60,7 +60,11 @@ mod tests {
     use std::{fs, path::PathBuf};
 
     use anyhow::Context;
-    use edr_eth::{transaction::TransactionRequestAndSender, Address};
+    use edr_eth::{
+        transaction::{Eip155TransactionRequest, TransactionRequest, TransactionRequestAndSender},
+        Address,
+    };
+    use edr_evm::{alloy_primitives::private::alloy_rlp, tracing_inspector::CallTraceNode};
     use edr_provider::{
         data::ProviderData,
         test_utils::{create_test_config, InspectorCallbacksStub},
@@ -107,7 +111,7 @@ mod tests {
         fn run_transaction(
             &mut self,
             transaction_request: TransactionRequestAndSender,
-        ) -> anyhow::Result<(ExecutionResult, Vec<Bytes>)> {
+        ) -> anyhow::Result<(ExecutionResult, Vec<CallTraceNode>, Vec<Bytes>)> {
             // Emulates automining behaviour without snapshot logic which is unnecessary
             // because each test has its owned provider fixture.
             let signed_transaction = self
@@ -118,7 +122,7 @@ mod tests {
                 .provider_data
                 .add_pending_transaction(signed_transaction)?;
 
-            let execution_result = self
+            let (execution_result, call_traces) = self
                 .provider_data
                 .mine_and_commit_block_for_transaction(&tx_hash)?
                 .context("Transaction was mined")?;
@@ -127,7 +131,31 @@ mod tests {
             // empty vec.
             let console_logs = std::mem::take(&mut *self.console_log_calls.lock());
 
-            Ok((execution_result, console_logs))
+            Ok((execution_result, call_traces, console_logs))
+        }
+
+        // return evm trace and console logs
+        fn run_test_step(
+            &mut self,
+            step: &TestStep,
+            current_steps_results: &Vec<Option<Address>>,
+        ) -> anyhow::Result<(ExecutionResult, Vec<CallTraceNode>, Vec<Bytes>)> {
+            let to_address: Option<Address> = match step.transaction.to {
+                Some(TestTransactionTo::Address(address)) => Some(address),
+                Some(TestTransactionTo::Contract(step_index)) => {
+                    if let Some(address) = current_steps_results
+                        .get(step_index as usize)
+                        .expect("Invalid step index")
+                    {
+                        Some(address.clone())
+                    } else {
+                        panic!("Contract address not found in previous steps results")
+                    }
+                }
+                None => None,
+            };
+
+            self.run_transaction(todo!("convert test step to transaction request"))
         }
     }
 
@@ -155,46 +183,17 @@ mod tests {
         steps: Vec<TestStep>,
     }
 
-    fn run_transaction(data: &Bytes, to: Option<Address>) -> (EVMTrace, Vec<String>) {
-        // TODO run tx in edr instance
-        unimplemented!()
-
-        // TODO return evm trace result and console.logs
-    }
-
-    // return evm trace and console logs
-    fn run_test_step(
-        step: &TestStep,
-        current_steps_results: &Vec<Option<Address>>,
-    ) -> (EVMTrace, Vec<String>) {
-        let to_address: Option<Address> = match step.transaction.to {
-            Some(TestTransactionTo::Address(address)) => Some(address),
-            Some(TestTransactionTo::Contract(step_index)) => {
-                if let Some(address) = current_steps_results
-                    .get(step_index as usize)
-                    .expect("Invalid step index")
-                {
-                    Some(address.clone())
-                } else {
-                    panic!("Contract address not found in previous steps results")
-                }
-            }
-            None => None,
-        };
-
-        run_transaction(&step.transaction.data, to_address)
-    }
-
     // Temporary function to run a stack trace test and get
     // the stack trace and the console logs.
     fn run_stack_trace_test(test: Test) -> anyhow::Result<()> {
-        let edr_instance = ProviderTestFixture::new()?;
+        let mut edr_instance = ProviderTestFixture::new()?;
 
         let codebase_model = build_model(test.solc_version, &test.solc_input, &test.solc_output);
         let mut steps_results: Vec<Option<Address>> = Vec::new();
 
         for step in test.steps {
-            let (evm_trace, console_logs) = run_test_step(&step, &steps_results);
+            let (execution_result, call_traces, console_logs) =
+                edr_instance.run_test_step(&step, &steps_results)?;
 
             if let ExecutionResult::Success {
                 reason,
@@ -202,7 +201,7 @@ mod tests {
                 gas_refunded,
                 logs,
                 output,
-            } = evm_trace.execution_result
+            } = execution_result
             {
                 if let Output::Create(_, Some(deployed_contract_address)) = output {
                     let address = Address::from(deployed_contract_address.0);

@@ -48,4 +48,6 @@ pub mod mempool;
 mod miner;
 pub(crate) mod random;
 mod runtime;
+/// Tracing inspector with recursive call traces and associated functionality.
+pub mod tracing_inspector;
 mod transaction;
