@@ -61,13 +61,22 @@ mod tests {
 
     use anyhow::Context;
     use edr_eth::{
-        transaction::{Eip155TransactionRequest, TransactionRequest, TransactionRequestAndSender},
+        transaction::{
+            LegacyTransactionRequest, TransactionKind, TransactionRequest,
+            TransactionRequestAndSender,
+        },
         Address,
     };
-    use edr_evm::tracing_inspector::{CallTraceNode, StackSnapshotType, TracingInspectorConfig};
+    use edr_evm::{
+        hex::FromHex,
+        tracing_inspector::{CallTraceNode, StackSnapshotType, TracingInspectorConfig},
+    };
     use edr_provider::{
         data::ProviderData,
-        test_utils::{create_test_config, InspectorCallbacksStub},
+        test_utils::{
+            create_test_config, create_test_config_with_impersonated_accounts_and_fork,
+            InspectorCallbacksStub,
+        },
         ProviderConfig,
     };
     use parking_lot::Mutex;
@@ -82,6 +91,7 @@ mod tests {
     };
 
     struct ProviderTestFixture {
+        account: Address,
         provider_data: ProviderData,
         console_log_calls: Arc<Mutex<Vec<Bytes>>>,
     }
@@ -93,9 +103,13 @@ mod tests {
             let console_log_calls = callbacks.console_log_calls.clone();
 
             let cache_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(edr_defaults::CACHE_DIR);
-            let config = create_test_config(cache_dir);
+            let account = Address::from_hex("f39Fd6e51aad88F6F4ce6aB8827279cffFb92266")?;
+            let config = create_test_config_with_impersonated_accounts_and_fork(
+                cache_dir,
+                vec![account],
+                /* forked */ false,
+            );
 
-            let config = ProviderConfig::try_from(config)?;
             // Assumes that this is invoked from a tokio runtime. This means that tests
             // should be ran with [tokio::test] attribute.
             let runtime = runtime::Handle::current();
@@ -110,6 +124,7 @@ mod tests {
             provider_data.set_tracing_config(tracing_config);
 
             Ok(Self {
+                account,
                 provider_data,
                 console_log_calls,
             })
@@ -141,6 +156,32 @@ mod tests {
             Ok((execution_result, call_traces, console_logs))
         }
 
+        fn run_test_transaction(
+            &mut self,
+            data: &Bytes,
+            to: Option<Address>,
+        ) -> anyhow::Result<(ExecutionResult, Vec<CallTraceNode>, Vec<Bytes>)> {
+            let kind = if let Some(to) = to {
+                TransactionKind::Call(to)
+            } else {
+                TransactionKind::Create
+            };
+
+            let nonce = self.provider_data.account_next_nonce(&self.account)?;
+
+            self.run_transaction(TransactionRequestAndSender {
+                request: TransactionRequest::Legacy(LegacyTransactionRequest {
+                    nonce,
+                    gas_price: U256::from(1_000_000_000u64),
+                    gas_limit: 1_000_000,
+                    kind,
+                    value: U256::ZERO,
+                    input: data.clone(),
+                }),
+                sender: self.account,
+            })
+        }
+
         // return evm trace and console logs
         fn run_test_step(
             &mut self,
@@ -162,7 +203,7 @@ mod tests {
                 None => None,
             };
 
-            self.run_transaction(todo!("convert test step to transaction request"))
+            self.run_test_transaction(&step.transaction.data, to_address)
         }
     }
 
