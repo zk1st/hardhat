@@ -64,7 +64,7 @@ mod tests {
         transaction::{Eip155TransactionRequest, TransactionRequest, TransactionRequestAndSender},
         Address,
     };
-    use edr_evm::{alloy_primitives::private::alloy_rlp, tracing_inspector::CallTraceNode};
+    use edr_evm::tracing_inspector::{CallTraceNode, StackSnapshotType, TracingInspectorConfig};
     use edr_provider::{
         data::ProviderData,
         test_utils::{create_test_config, InspectorCallbacksStub},
@@ -101,6 +101,13 @@ mod tests {
             let runtime = runtime::Handle::current();
 
             let mut provider_data = ProviderData::new(runtime, callbacks, config)?;
+            let tracing_config = TracingInspectorConfig {
+                record_steps: true,
+                record_stack_snapshots: StackSnapshotType::None,
+                record_state_diff: false,
+                exclude_precompile_calls: false,
+            };
+            provider_data.set_tracing_config(tracing_config);
 
             Ok(Self {
                 provider_data,

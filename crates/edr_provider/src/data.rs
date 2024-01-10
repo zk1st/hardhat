@@ -789,6 +789,10 @@ impl ProviderData {
         Ok(())
     }
 
+    pub fn set_tracing_config(&mut self, tracing_config: TracingInspectorConfig) {
+        self.tracing_config = tracing_config;
+    }
+
     pub fn send_transaction(
         &mut self,
         transaction_request: TransactionRequestAndSender,
@@ -1079,6 +1083,10 @@ impl ProviderData {
         self.blockchain
             .total_difficulty_by_hash(hash)
             .map_err(ProviderError::Blockchain)
+    }
+
+    pub fn tracing_config(&self) -> &TracingInspectorConfig {
+        &self.tracing_config
     }
 
     /// Get a transaction by hash from the blockchain or from the mempool if

@@ -15,7 +15,7 @@ use utils::gas_used;
 
 pub use crate::tracing_inspector::{
     call_traces::CallTraces,
-    config::TracingInspectorConfig,
+    config::{StackSnapshotType, TracingInspectorConfig},
     types::{
         CallKind, CallTrace, CallTraceNode, CallTraceStep, RecordedMemory, StorageChange,
         StorageChangeReason,
