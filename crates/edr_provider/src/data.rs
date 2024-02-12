@@ -2028,25 +2028,26 @@ impl<LoggerErrorT: Debug> ProviderData<LoggerErrorT> {
         &mut self,
         block_number: u64,
     ) -> Result<Arc<Box<dyn SyncState<StateError>>>, ProviderError<LoggerErrorT>> {
-        if let Some(state_id) = self.block_number_to_state_id.get(&block_number) {
-            // We cannot use `LruCache::try_get_or_insert`, because it needs &mut self, but
-            // we would need &self in the callback to reference the blockchain.
-            if let Some(state) = self.block_state_cache.get(state_id) {
-                return Ok(state.clone());
-            }
-        };
+        // if let Some(state_id) = self.block_number_to_state_id.get(&block_number) {
+        //     // We cannot use `LruCache::try_get_or_insert`, because it needs &mut
+        // self, but     // we would need &self in the callback to reference the
+        // blockchain.     if let Some(state) =
+        // self.block_state_cache.get(state_id) {         return
+        // Ok(state.clone());     }
+        // };
 
         let state = self
             .blockchain
             .state_at_block_number(block_number, self.irregular_state.state_overrides())?;
-        let state_id = self.add_state_to_cache(state, block_number);
-        Ok(self
-            .block_state_cache
-            .get(&state_id)
-            // State must exist, since we just inserted it, and we have exclusive access to
-            // the cache due to &mut self.
-            .expect("State must exist")
-            .clone())
+        Ok(Arc::new(state))
+        // let state_id = self.add_state_to_cache(state, block_number);
+        // Ok(self
+        //     .block_state_cache
+        //     .get(&state_id)
+        //     // State must exist, since we just inserted it, and we have
+        // exclusive access to     // the cache due to &mut self.
+        //     .expect("State must exist")
+        //     .clone())
     }
 
     fn add_state_to_cache(
