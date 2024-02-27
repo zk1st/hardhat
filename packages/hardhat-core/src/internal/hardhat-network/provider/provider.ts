@@ -8,6 +8,7 @@ import type {
   HardhatNetworkChainsConfig,
   RequestArguments,
 } from "../../../types";
+import { Mutex } from "../../vendor/await-semaphore";
 
 import {
   EdrContext,
@@ -170,6 +171,8 @@ export class EdrProviderWrapper
 
   // temporarily added to make smock work with HH+EDR
   private _callOverrideCallback?: CallOverrideCallback;
+
+  private readonly _mutex = new Mutex();
 
   private constructor(
     private readonly _provider: EdrProviderT,
@@ -334,117 +337,123 @@ export class EdrProviderWrapper
   }
 
   public async request(args: RequestArguments): Promise<unknown> {
-    if (args.params !== undefined && !Array.isArray(args.params)) {
-      throw new InvalidInputError(
-        "Hardhat Network doesn't support JSON-RPC params sent as an object"
+    const release = await this._mutex.acquire();
+
+    try {
+      if (args.params !== undefined && !Array.isArray(args.params)) {
+        throw new InvalidInputError(
+          "Hardhat Network doesn't support JSON-RPC params sent as an object"
+        );
+      }
+
+      const params = args.params ?? [];
+
+      if (args.method === "hardhat_addCompilationResult") {
+        return this._addCompilationResultAction(
+          ...this._addCompilationResultParams(params)
+        );
+      } else if (args.method === "hardhat_getStackTraceFailuresCount") {
+        return this._getStackTraceFailuresCountAction(
+          ...this._getStackTraceFailuresCountParams(params)
+        );
+      }
+
+      const stringifiedArgs = JSON.stringify({
+        method: args.method,
+        params,
+      });
+
+      const responseObject: Response = await this._provider.handleRequest(
+        stringifiedArgs
       );
-    }
+      const response = JSON.parse(responseObject.json);
 
-    const params = args.params ?? [];
-
-    if (args.method === "hardhat_addCompilationResult") {
-      return this._addCompilationResultAction(
-        ...this._addCompilationResultParams(params)
-      );
-    } else if (args.method === "hardhat_getStackTraceFailuresCount") {
-      return this._getStackTraceFailuresCountAction(
-        ...this._getStackTraceFailuresCountParams(params)
-      );
-    }
-
-    const stringifiedArgs = JSON.stringify({
-      method: args.method,
-      params,
-    });
-
-    const responseObject: Response = await this._provider.handleRequest(
-      stringifiedArgs
-    );
-    const response = JSON.parse(responseObject.json);
-
-    const rawTraces = responseObject.traces;
-    for (const rawTrace of rawTraces) {
-      const trace = rawTrace.trace();
-      for (const traceItem of trace) {
-        if ("pc" in traceItem) {
-          this._node._vm.evm.events.emit(
-            "step",
-            edrTracingStepToMinimalInterpreterStep(traceItem)
-          );
-          if (this._rawTraceCallbacks.onStep !== undefined) {
-            await this._rawTraceCallbacks.onStep(traceItem);
+      const rawTraces = responseObject.traces;
+      for (const rawTrace of rawTraces) {
+        const trace = rawTrace.trace();
+        for (const traceItem of trace) {
+          if ("pc" in traceItem) {
+            this._node._vm.evm.events.emit(
+              "step",
+              edrTracingStepToMinimalInterpreterStep(traceItem)
+            );
+            if (this._rawTraceCallbacks.onStep !== undefined) {
+              await this._rawTraceCallbacks.onStep(traceItem);
+            }
+          } else if ("executionResult" in traceItem) {
+            this._node._vm.evm.events.emit(
+              "afterMessage",
+              edrTracingMessageResultToMinimalEVMResult(traceItem)
+            );
+            if (this._rawTraceCallbacks.onAfterMessage !== undefined) {
+              await this._rawTraceCallbacks.onAfterMessage(
+                traceItem.executionResult
+              );
+            }
+          } else {
+            this._node._vm.evm.events.emit(
+              "beforeMessage",
+              edrTracingMessageToMinimalMessage(traceItem)
+            );
+            if (this._rawTraceCallbacks.onBeforeMessage !== undefined) {
+              await this._rawTraceCallbacks.onBeforeMessage(traceItem);
+            }
           }
-        } else if ("executionResult" in traceItem) {
-          this._node._vm.evm.events.emit(
-            "afterMessage",
-            edrTracingMessageResultToMinimalEVMResult(traceItem)
-          );
-          if (this._rawTraceCallbacks.onAfterMessage !== undefined) {
-            await this._rawTraceCallbacks.onAfterMessage(
-              traceItem.executionResult
+        }
+      }
+
+      if (isErrorResponse(response)) {
+        let error;
+
+        const solidityTrace = responseObject.solidityTrace;
+        let stackTrace: SolidityStackTrace | undefined;
+        if (solidityTrace !== null) {
+          stackTrace = await this._rawTraceToSolidityStackTrace(solidityTrace);
+        }
+
+        if (stackTrace !== undefined) {
+          error = encodeSolidityStackTrace(response.error.message, stackTrace);
+          // Pass data and transaction hash from the original error
+          (error as any).data = {
+            data: response.error.data?.data ?? undefined,
+            transactionHash: response.error.data?.transactionHash ?? undefined,
+          };
+        } else {
+          if (response.error.code === InvalidArgumentsError.CODE) {
+            error = new InvalidArgumentsError(response.error.message);
+          } else {
+            error = new ProviderError(
+              response.error.message,
+              response.error.code
             );
           }
-        } else {
-          this._node._vm.evm.events.emit(
-            "beforeMessage",
-            edrTracingMessageToMinimalMessage(traceItem)
-          );
-          if (this._rawTraceCallbacks.onBeforeMessage !== undefined) {
-            await this._rawTraceCallbacks.onBeforeMessage(traceItem);
-          }
+          error.data = response.error.data;
         }
-      }
-    }
 
-    if (isErrorResponse(response)) {
-      let error;
-
-      const solidityTrace = responseObject.solidityTrace;
-      let stackTrace: SolidityStackTrace | undefined;
-      if (solidityTrace !== null) {
-        stackTrace = await this._rawTraceToSolidityStackTrace(solidityTrace);
+        // eslint-disable-next-line @nomicfoundation/hardhat-internal-rules/only-hardhat-error
+        throw error;
       }
 
-      if (stackTrace !== undefined) {
-        error = encodeSolidityStackTrace(response.error.message, stackTrace);
-        // Pass data and transaction hash from the original error
-        (error as any).data = {
-          data: response.error.data?.data ?? undefined,
-          transactionHash: response.error.data?.transactionHash ?? undefined,
-        };
+      if (args.method === "hardhat_reset") {
+        this.emit(HARDHAT_NETWORK_RESET_EVENT);
+      } else if (args.method === "evm_revert") {
+        this.emit(HARDHAT_NETWORK_REVERT_SNAPSHOT_EVENT);
+      }
+
+      // Override EDR version string with Hardhat version string with EDR backend,
+      // e.g. `HardhatNetwork/2.19.0/@nomicfoundation/edr/0.2.0-dev`
+      if (args.method === "web3_clientVersion") {
+        return clientVersion(response.result);
+      } else if (
+        args.method === "debug_traceTransaction" ||
+        args.method === "debug_traceCall"
+      ) {
+        return edrRpcDebugTraceToHardhat(response.result);
       } else {
-        if (response.error.code === InvalidArgumentsError.CODE) {
-          error = new InvalidArgumentsError(response.error.message);
-        } else {
-          error = new ProviderError(
-            response.error.message,
-            response.error.code
-          );
-        }
-        error.data = response.error.data;
+        return response.result;
       }
-
-      // eslint-disable-next-line @nomicfoundation/hardhat-internal-rules/only-hardhat-error
-      throw error;
-    }
-
-    if (args.method === "hardhat_reset") {
-      this.emit(HARDHAT_NETWORK_RESET_EVENT);
-    } else if (args.method === "evm_revert") {
-      this.emit(HARDHAT_NETWORK_REVERT_SNAPSHOT_EVENT);
-    }
-
-    // Override EDR version string with Hardhat version string with EDR backend,
-    // e.g. `HardhatNetwork/2.19.0/@nomicfoundation/edr/0.2.0-dev`
-    if (args.method === "web3_clientVersion") {
-      return clientVersion(response.result);
-    } else if (
-      args.method === "debug_traceTransaction" ||
-      args.method === "debug_traceCall"
-    ) {
-      return edrRpcDebugTraceToHardhat(response.result);
-    } else {
-      return response.result;
+    } finally {
+      release();
     }
   }
 
