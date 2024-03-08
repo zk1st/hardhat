@@ -30,6 +30,8 @@ import {
   isHexString,
   resolveAddress,
   toQuantity,
+  zeroPadBytes,
+  dataLength,
 } from "ethers";
 import { EthereumProvider } from "hardhat/types";
 
@@ -250,10 +252,18 @@ export class HardhatEthersProvider implements ethers.Provider {
     const rpcTransaction = getRpcTransaction(resolvedTx);
     const rpcBlockTag = this._getRpcBlockTag(resolvedBlockTag);
 
-    return this._hardhatProvider.send("eth_call", [
+    const output = await this._hardhatProvider.send("eth_call", [
       rpcTransaction,
       rpcBlockTag,
     ]);
+
+    // ethers expects values to be be padded to a multiple of 32 bytes
+    let byteLength = dataLength(output);
+    let paddedByteLength = Math.max(
+      32,
+      Math.floor((byteLength + 31) / 32) * 32
+    );
+    return zeroPadBytes(output, paddedByteLength);
   }
 
   public async broadcastTransaction(
