@@ -16,5 +16,5 @@ The measurements will be printed to stdout as machine-readable json and to stder
 It's possible to grep the output to run a specific scenario:
 
 ```shell
-npm run benchmark -- --grep seaport
+pnpm run benchmark -- --grep seaport
 ```

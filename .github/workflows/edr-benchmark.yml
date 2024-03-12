@@ -1,0 +1,67 @@
+name: hardhat-core CI
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/hardhat-core-ci.yml"
+      - "rust-toolchain"
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "config/**"
+      - "crates/**"
+      - "packages/hardhat-core/**"
+      - "packages/hardhat-common/**"
+  pull_request:
+    branches:
+      - "**"
+    paths:
+      - ".github/workflows/hardhat-core-ci.yml"
+      - "rust-toolchain"
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "config/**"
+      - "crates/**"
+      - "packages/hardhat-core/**"
+      - "packages/hardhat-common/**"
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: crates/tools/js/benchmark
+
+concurrency:
+  group: ${{github.workflow}}-${{github.ref}}
+  cancel-in-progress: true
+
+jobs:
+  js-benchmark:
+    name: Run JS scenario runner benchmark
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 8
+      - name: Install Node
+        uses: actions/setup-node@v2
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install Rust (stable)
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          override: true
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install package
+        run: pnpm install --frozen-lockfile --prefer-offline
+
+      - name: Run benchmark
+        run: pnpm run benchmark
+
