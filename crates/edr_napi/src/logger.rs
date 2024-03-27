@@ -12,6 +12,10 @@ use edr_evm::{
     ExecutableTransaction, ExecutionResult, SyncBlock,
 };
 use edr_provider::{ProviderError, TransactionFailure};
+use edr_solidity::{
+    abi::console_log::{patch_hardhat_console_selector, HardhatConsole},
+    SolInterface,
+};
 use itertools::izip;
 use napi::{Env, JsFunction, NapiRaw, Status};
 use napi_derive::napi;
@@ -110,6 +114,8 @@ enum LogLine {
 
 #[derive(Debug, thiserror::Error)]
 pub enum LoggerError {
+    #[error("Failed to decode console.log inputs: {0}")]
+    DecodeConsoleLog(#[from] edr_solidity::Error),
     #[error("Failed to print line")]
     PrintLine,
 }
@@ -790,7 +796,22 @@ impl LogCollector {
         });
     }
 
-    fn log_console_log_messages(&mut self, console_log_inputs: &[Bytes]) {
+    fn log_console_log_messages(
+        &mut self,
+        console_log_inputs: &[Bytes],
+    ) -> Result<(), LoggerError> {
+        let decoded_inputs = console_log_inputs
+            .iter()
+            .map(|input| {
+                let input = input.to_vec();
+                patch_hardhat_console_selector(&mut input);
+
+                let decoded = HardhatConsole::HardhatConsoleCalls::abi_decode(&input, false)?;
+
+                Ok(decoded)
+            })
+            .collect();
+
         let (sender, receiver) = channel();
 
         let status = self.decode_console_log_inputs_fn.call(

@@ -44,30 +44,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0942ffc6dcaadf03badf6e6a2d0228460359d5e34b57ccdc720b7382dfbd5ec5"
 
 [[package]]
-name = "alloy-primitives"
-version = "0.5.3"
+name = "alloy-json-abi"
+version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c0e5e60ff0e0c34c553822dabcfe0f5fece5a8c52f08a915be8c737de4b03fa"
+checksum = "24ed0f2a6c3a1c947b4508522a53a190dba8f94dcd4e3e1a5af945a498e78f2f"
 dependencies = [
- "alloy-rlp",
- "bytes",
- "cfg-if",
- "const-hex",
- "derive_more",
- "hex-literal",
- "itoa",
- "proptest",
- "rand",
- "ruint",
+ "alloy-primitives",
+ "alloy-sol-type-parser",
  "serde",
- "tiny-keccak",
 ]
 
 [[package]]
 name = "alloy-primitives"
-version = "0.6.3"
+version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ef197eb250c64962003cb08b90b17f0882c192f4a6f2f544809d424fd7cb0e7d"
+checksum = "600d34d8de81e23b6d909c094e23b3d357e01ca36b78a8c5424c501eedbe86f0"
 dependencies = [
  "alloy-rlp",
  "bytes",
@@ -111,10 +102,11 @@ dependencies = [
 
 [[package]]
 name = "alloy-sol-macro"
-version = "0.5.2"
+version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e40cea54ac58080a1b88ea6556866eac1902b321186c77d53ad2b5ebbbf0e038"
+checksum = "e86ec0a47740b20bc5613b8712d0d321d031c4efc58e9645af96085d5cccfc27"
 dependencies = [
+ "alloy-json-abi",
  "const-hex",
  "dunce",
  "heck",
@@ -122,18 +114,29 @@ dependencies = [
  "proc-macro-error",
  "proc-macro2",
  "quote",
+ "serde_json",
  "syn 2.0.38",
  "syn-solidity",
  "tiny-keccak",
 ]
 
 [[package]]
-name = "alloy-sol-types"
-version = "0.5.2"
+name = "alloy-sol-type-parser"
+version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f81aa34725607be118c395d62c1d8d97c8a343dd1ada5370ed508ed5232eab6a"
+checksum = "0045cc89524e1451ccf33e8581355b6027ac7c6e494bb02959d4213ad0d8e91d"
 dependencies = [
- "alloy-primitives 0.5.3",
+ "winnow 0.6.5",
+]
+
+[[package]]
+name = "alloy-sol-types"
+version = "0.6.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ad09ec5853fa700d12d778ad224dcdec636af424d29fad84fb9a2f16a5b0ef09"
+dependencies = [
+ "alloy-json-abi",
+ "alloy-primitives",
  "alloy-sol-macro",
  "const-hex",
  "serde",
@@ -1003,7 +1006,7 @@ version = "0.2.0-dev"
 name = "edr_eth"
 version = "0.2.0-dev"
 dependencies = [
- "alloy-primitives 0.6.3",
+ "alloy-primitives",
  "alloy-rlp",
  "anyhow",
  "assert-json-diff",
@@ -1082,6 +1085,7 @@ dependencies = [
  "edr_eth",
  "edr_evm",
  "edr_provider",
+ "edr_solidity",
  "itertools 0.12.0",
  "k256",
  "lazy_static",
@@ -1119,6 +1123,7 @@ dependencies = [
  "lazy_static",
  "log",
  "lru",
+ "once_cell",
  "parking_lot 0.12.1",
  "paste",
  "rand",
@@ -1137,8 +1142,10 @@ dependencies = [
 name = "edr_solidity"
 version = "0.2.0-dev"
 dependencies = [
+ "alloy-sol-types",
  "edr_eth",
  "edr_evm",
+ "once_cell",
 ]
 
 [[package]]
@@ -2913,7 +2920,7 @@ version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2a4d7d3e793e907dc0797a9d3b43abfdf5226d133855214db9bd27d4cee33ebd"
 dependencies = [
- "alloy-primitives 0.6.3",
+ "alloy-primitives",
  "auto_impl",
  "bitflags 2.4.2",
  "bitvec",
@@ -3452,9 +3459,9 @@ dependencies = [
 
 [[package]]
 name = "syn-solidity"
-version = "0.5.2"
+version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e2c7ad08db24862d5b787a94714ff6b047935c3e3f60af944ac969404debd7ff"
+checksum = "cb3d0961cd53c23ea94eeec56ba940f636f6394788976e9f16ca5ee0aca7464a"
 dependencies = [
  "paste",
  "proc-macro2",
@@ -3693,7 +3700,7 @@ dependencies = [
  "serde",
  "serde_spanned",
  "toml_datetime",
- "winnow",
+ "winnow 0.5.16",
 ]
 
 [[package]]
@@ -4223,6 +4230,12 @@ checksum = "037711d82167854aff2018dfd193aa0fef5370f456732f0d5a0c59b0f1b4b907"
 dependencies = [
  "memchr",
 ]
+
+[[package]]
+name = "winnow"
+version = "0.6.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dffa400e67ed5a4dd237983829e66475f0a4a26938c4b04c21baede6262215b8"
 
 [[package]]
 name = "winreg"

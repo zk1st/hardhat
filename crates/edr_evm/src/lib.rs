@@ -21,7 +21,6 @@ pub use crate::{
     runtime::{dry_run, guaranteed_dry_run, run, SyncDatabase},
     transaction::*,
 };
-
 /// Types for managing Ethereum blockchain
 pub mod blockchain;
 
