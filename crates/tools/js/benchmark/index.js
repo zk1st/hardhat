@@ -8,10 +8,12 @@ const zlib = require("zlib");
 
 const { ArgumentParser } = require("argparse");
 const { _ } = require("lodash");
-
 const {
-  createHardhatNetworkProvider,
+  HardhatNetworkProvider,
 } = require("hardhat/internal/hardhat-network/provider/provider");
+const {
+  ModulesLogger,
+} = require("hardhat/internal/hardhat-network/provider/modules/logger");
 
 const SCENARIOS_DIR = "../../scenarios/";
 const SCENARIO_SNAPSHOT_NAME = "snapshot.json";
@@ -196,9 +198,10 @@ async function benchmarkScenario(scenarioFileName) {
 
   const start = performance.now();
 
-  const provider = await createHardhatNetworkProvider(config.providerConfig, {
-    enabled: config.loggerEnabled,
-  });
+  const provider = new HardhatNetworkProvider(
+    config.providerConfig,
+    new ModulesLogger(config.loggerEnabled)
+  );
 
   const failures = [];
   const rpcCallResults = [];
