@@ -145,6 +145,11 @@ async function benchmarkAllScenarios(outPath) {
   let totalTime = 0;
   let totalFailures = 0;
   for (let scenarioFileName of getScenarioFileNames()) {
+    if (scenarioFileName.includes("synthetix")) {
+      // Skip Synthetix scenarios as it crashes with HH 2.20.1 which uses EJS
+      console.error("Skipping Synthetix scenario");
+      continue;
+    }
     // Run in subprocess with grep to simulate Hardhat test runner behaviour
     // where there is one provider per process
     const processResult = child_process.spawnSync(
