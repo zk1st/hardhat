@@ -166,6 +166,8 @@ export class Reporter {
       dsn: SENTRY_DSN,
       transport: getSubprocessTransport(),
       integrations: () => [linkedErrorsIntegration],
+      // Don't truncate error messages smaller than 1000 chars
+      maxValueLength: 1000,
     });
 
     this.initialized = true;
