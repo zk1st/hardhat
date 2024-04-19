@@ -71,6 +71,22 @@ export class HardhatRuntimeEnvironment implements IHardhatRuntimeEnvionment {
   ) {}
 }
 
+export class T {
+  readonly #f: number;
+
+  private constructor(f: number) {
+    this.#f = f;
+    this.#foo();
+    this.#bar();
+  }
+
+  #foo() {
+    console.log(this.#f);
+  }
+
+  #bar() {}
+}
+
 async function runUserConfigExtensions(
   hooks: Hooks,
   config: HardhatUserConfig,
@@ -83,7 +99,7 @@ async function runUserConfigExtensions(
   let index = extendUserConfigHooks.length - 1;
   const next = async (userConfig: HardhatUserConfig) => {
     if (index >= 0) {
-      return extendUserConfigHooks[index--]!(userConfig, next);
+      return extendUserConfigHooks[index--](userConfig, next);
     }
 
     return userConfig;
@@ -125,7 +141,7 @@ async function resolveUserConfig(
   let index = resolveUserConfigHooks.length - 1;
   const next = async (userConfig: HardhatUserConfig) => {
     if (index >= 0) {
-      return resolveUserConfigHooks[index--]!(userConfig, next);
+      return resolveUserConfigHooks[index--](userConfig, next);
     }
 
     return initialResolvedConfig;

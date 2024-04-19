@@ -119,7 +119,7 @@ function createConfig(configFilePath, packageEntryPoints = []) {
           selector: ["classProperty"],
           modifiers: ["private"],
           format: ["camelCase", "UPPER_CASE"],
-          leadingUnderscore: "require",
+          leadingUnderscore: "allow",
         },
         {
           selector: "enumMember",
@@ -129,7 +129,7 @@ function createConfig(configFilePath, packageEntryPoints = []) {
           selector: "memberLike",
           modifiers: ["private"],
           format: ["camelCase"],
-          leadingUnderscore: "require",
+          leadingUnderscore: "allow",
         },
         {
           selector: ["objectLiteralProperty"],
@@ -148,11 +148,6 @@ function createConfig(configFilePath, packageEntryPoints = []) {
         {
           selector: "typeLike",
           format: ["PascalCase"],
-        },
-        {
-          selector: "typeProperty",
-          filter: "__hardhatContext",
-          format: null,
         },
       ],
       "@typescript-eslint/no-empty-interface": "error",
@@ -179,6 +174,17 @@ function createConfig(configFilePath, packageEntryPoints = []) {
       "@typescript-eslint/prefer-for-of": "error",
       "@typescript-eslint/prefer-function-type": "error",
       "@typescript-eslint/prefer-namespace-keyword": "error",
+      "@typescript-eslint/prefer-readonly": "error",
+      // "@typescript-eslint/prefer-readonly-parameter-types": "error", // TBD if we enable it
+      // This forces use to use native #private fields
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector:
+            ':matches(PropertyDefinition, MethodDefinition[kind!="constructor"], TSParameterProperty)[accessibility="private"]',
+          message: "Use #private instead",
+        },
+      ],
       "@typescript-eslint/restrict-plus-operands": "error",
       "@typescript-eslint/restrict-template-expressions": [
         "error",
@@ -255,7 +261,6 @@ function createConfig(configFilePath, packageEntryPoints = []) {
       "one-var": ["error", "never"],
       "prefer-const": "error",
       "prefer-object-spread": "error",
-      "prefer-template": "error",
       radix: "error",
       "spaced-comment": [
         "error",

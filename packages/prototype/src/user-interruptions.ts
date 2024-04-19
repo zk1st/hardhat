@@ -23,7 +23,7 @@ export class UserInteractionsUtils implements IUserInterruptions {
       let index = hooks.length - 1;
       const next = async (msg: string, r: string) => {
         if (index >= 0) {
-          return hooks[index--]!(msg, r, next);
+          return hooks[index--](msg, r, next);
         }
 
         if (defaultHandler !== undefined) {
@@ -51,7 +51,7 @@ export class UserInteractionsUtils implements IUserInterruptions {
       let index = hooks.length - 1;
       const next = async (id: string, r: string) => {
         if (index >= 0) {
-          return hooks[index--]!(id, r, next);
+          return hooks[index--](id, r, next);
         }
 
         if (defaultHandler !== undefined) {
@@ -79,7 +79,7 @@ export class UserInteractionsUtils implements IUserInterruptions {
       let index = hooks.length - 1;
       const next = async (id: string, r: string) => {
         if (index >= 0) {
-          return hooks[index--]!(id, r, next);
+          return hooks[index--](id, r, next);
         }
 
         if (defaultHandler !== undefined) {
@@ -146,7 +146,7 @@ class AsyncMutex {
   public async excluiveRun<ReturnT>(
     f: () => ReturnT,
   ): Promise<Awaited<ReturnT>> {
-    const release = await this._acquire();
+    const release = await this.#acquire();
 
     try {
       // eslint-disable-next-line @typescript-eslint/return-await, @typescript-eslint/await-thenable
@@ -159,7 +159,7 @@ class AsyncMutex {
   /**
    * Aquires the mutex, returning a function that releases it.
    */
-  private async _acquire(): Promise<() => Promise<void>> {
+  async #acquire(): Promise<() => Promise<void>> {
     if (!this.#acquired) {
       this.#acquired = true;
       return async () => {
@@ -173,8 +173,18 @@ class AsyncMutex {
 
     return new Promise<() => Promise<void>>((resolve) => {
       this.#queue.push(() => {
-        resolve(this._acquire());
+        resolve(this.#acquire());
       });
     });
   }
 }
+
+interface Foo {
+  bar: string;
+  baz: string;
+  [other: string]: string;
+}
+const foo: Foo = { bar: "bar", baz: "baz" };
+
+console.log(foo.bar.length);
+console.log(foo.asd?.length);
