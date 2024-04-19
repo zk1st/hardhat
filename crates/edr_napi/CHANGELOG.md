@@ -1,5 +1,15 @@
 # @nomicfoundation/edr
 
+## 0.3.6
+
+### Patch Changes
+
+- 7745f35: Fixed mining of blocks when forking a chain that has non-Ethereum block headers
+- e6665a5: fix: avoid ecrecover for known sender
+- dc6840c: perf: changed internal data structures to achieve to constant time checkpointing for significant performance improvements on large test suites
+- 7745f35: Fixed panic when re-setting global default subscriber
+- abb6316: fix: avoid cloning transaction traces for improved performance
+
 ## 0.3.5
 
 ### Patch Changes
