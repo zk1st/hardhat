@@ -1,10 +1,11 @@
-export type Primitive = number | string | boolean | bigint;
+import { UserInterruptions } from "./user-interruptions.js";
 
-interface LazyConfigValue<T extends Primitive> {
-  get(): Promise<T>;
+export type PrimitiveConfigValue = number | string | boolean | bigint;
+
+export interface LazyConfigValue<T extends PrimitiveConfigValue> {
+  get(userInterruptions: UserInterruptions): Promise<T>;
 }
 
-// TODO: These need better names
 export type HardhatUserConfigNumber = number | LazyConfigValue<number>;
 export type HardhatConfigNumber = LazyConfigValue<number>;
 
@@ -19,10 +20,12 @@ export type HardhatUserBigint = LazyConfigValue<bigint>;
 
 export interface HardhatUserConfig {
   solidity?: string | SolidityUserConfig;
+  privateKey?: HardhatUserConfigString;
 }
 
 export interface HardhatConfig {
   solidity: SolidityConfig;
+  privateKey: HardhatConfigString;
 }
 
 export interface SolidityUserConfig {

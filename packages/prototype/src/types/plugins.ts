@@ -23,6 +23,7 @@ export interface HardhatPlugin {
 
 export interface HardhatPluginHooks {
   config?: HardhatPluginConfigHooks | URL;
+  userInterruption?: UserInterruptionsHooks | URL;
 }
 
 export type ExtensionHook<ValueT> = (
@@ -46,4 +47,21 @@ export interface HardhatPluginConfigHooks {
 export interface HardhatUserConfigValidationError {
   path: Array<string | number>;
   message: string;
+}
+
+export interface UserInterruptionsHooks {
+  displayMessage?: (
+    message: string,
+    next: (m: string) => Promise<void>,
+  ) => Promise<void>;
+
+  requestInput?: (
+    inputDescription: string,
+    next: (id: string) => Promise<string>,
+  ) => Promise<string>;
+
+  requestSecretInput?: (
+    inputDescription: string,
+    next: (id: string) => Promise<string>,
+  ) => Promise<string>;
 }

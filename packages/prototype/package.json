@@ -10,8 +10,7 @@
   "type": "module",
   "types": "dist/src/index.d.ts",
   "exports": {
-    ".": "./dist/src/index.js",
-    "./other": "./dist/src/other-entry-point.js"
+    ".": "./dist/src/index.js"
   },
   "keywords": [
     "ethereum",
@@ -53,6 +52,7 @@
     "typescript-eslint": "7.5.0"
   },
   "dependencies": {
+    "enquirer": "^2.3.0",
     "zod": "^3.22.4"
   }
 }

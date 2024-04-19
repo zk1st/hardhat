@@ -1,13 +1,8 @@
 import path, { isAbsolute } from "path";
-import { getHooks } from "./plugins/hook-utils.js";
-import { HardhatConfig, HardhatUserConfig } from "./types/config.js";
-
-import {
-  HardhatPlugin,
-  HardhatUserConfigValidationError,
-} from "./types/plugins.js";
-import { reverseTopologicalSort } from "./plugins/sort.js";
-import builtinFunctionality from "./builtin-functionality.js";
+import { createInterface } from "readline";
+import { HardhatRuntimeEnvironment } from "./hre.js";
+import { UserInterruptions } from "./types/user-interruptions.js";
+import { UserInterruptionsHooks } from "./types/plugins.js";
 
 await main();
 
@@ -31,134 +26,85 @@ async function main() {
     return;
   }
 
-  const hre = await createHardhatRuntimeEnvionment(config);
+  const hre = await HardhatRuntimeEnvironment.create(config);
 
   const now = process.hrtime.bigint();
   console.log("Time to initialize the HRE (ms):", (now - then) / 1000000n);
 
-  console.log(hre.config);
+  console.log("\n\n\n");
+
+  await ignition(hre);
 }
 
-async function createHardhatRuntimeEnvionment(config: HardhatUserConfig) {
-  // Clone with lodash or https://github.com/davidmarkclements/rfdc
-  const clonedConfig = config;
+async function ignition(hre: HardhatRuntimeEnvironment) {
+  const ignitionInterruptionHooks: UserInterruptionsHooks = {
+    async requestSecretInput(
+      inputDescription: string,
+      next: (m: string) => Promise<string>,
+    ): Promise<string> {
+      console.log("Ignition request secret input");
+      return readlineRequestSecretInput(inputDescription, next);
+    },
+  };
 
-  // Topological sort of plugins
-  const sortedPlugins = reverseTopologicalSort([
-    builtinFunctionality,
-    ...(clonedConfig.plugins ?? []),
-  ]);
+  hre.hooks.registerHooks("userInterruption", ignitionInterruptionHooks);
 
-  // Validated plugins set to avoid re-validations
-  const validatedPlugins: Set<string> = new Set();
+  try {
+    // We print something complex here
+    for (let i = 0; i < 20; i++) {
+      console.log(i);
 
-  // extend user config:
-  const userConfig = await runUserConfigExtensions(
-    sortedPlugins,
-    validatedPlugins,
-    clonedConfig,
-  );
+      if (i === 10) {
+        // Sudendly we get an interruption, which is printed with our own function
+        const pk = await hre.config.privateKey.get(hre.interruptions);
+        await hre.interruptions.displayMessage(`Got private key: ${pk}`);
+      }
 
-  // validate config
-  const userConfigValidationErrors = await validateUserConfig(
-    sortedPlugins,
-    validatedPlugins,
-    userConfig,
-  );
-
-  if (userConfigValidationErrors.length > 0) {
-    throw new Error(
-      `Invalid config:\n\t${userConfigValidationErrors
-        .map((error) => `Config error in ${error.path}: ${error.message}`)
-        .join("\n\t")}`,
-    );
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    }
+  } finally {
+    hre.hooks.unregisterHooks("userInterruption", ignitionInterruptionHooks);
   }
 
-  // Resolve config
-
-  const resolvedConfig = await resolveUserConfig(
-    sortedPlugins,
-    validatedPlugins,
-    config,
-  );
-
-  return {
-    config: resolvedConfig,
-    userConfig, // TODO: Why do we use it?
-    plugins: {
-      validatedPlugins,
-    },
-    // Network
-    // Build system
-    // Task runner
-  };
+  const pk2 = await hre.config.privateKey.get(hre.interruptions);
+  await hre.interruptions.displayMessage(`Got private key: ${pk2}`);
 }
 
-async function runUserConfigExtensions(
-  sortedPlugins: HardhatPlugin[],
-  validatedPlugins: Set<string>,
-  config: HardhatUserConfig,
-): Promise<HardhatUserConfig> {
-  const hooks = await getHooks(
-    sortedPlugins,
-    validatedPlugins,
-    "config",
-    "extendUserConfig",
-  );
+async function readlineRequestSecretInput(
+  inputDescription: string,
+  _next: (m: string) => Promise<string>,
+): Promise<string> {
+  const rl = createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
 
-  let index = hooks.length - 1;
-  const next = async (userConfig: HardhatUserConfig) => {
-    if (index >= 0) {
-      return hooks[index--]!(userConfig, next);
+  const echo = "*"; // or '' if you prefer
+  let first: string | undefined;
+
+  (rl as any)._writeToOutput = (c: string) => {
+    if (first === undefined || c.length !== 1) {
+      if (first === undefined) first = c;
+      if (c.startsWith(first)) {
+        // rewriting prompt
+        (rl as any).output?.write(first);
+        c = c.slice(first.length);
+      } else if (c.trim() === "") {
+        // user pressed enter, show the enter
+        (rl as any).output?.write(c);
+        c = "";
+      }
     }
-
-    return userConfig;
-  };
-
-  return next(config);
-}
-
-async function validateUserConfig(
-  sortedPlugins: HardhatPlugin[],
-  validatedPlugins: Set<string>,
-  config: HardhatUserConfig,
-): Promise<HardhatUserConfigValidationError[]> {
-  const hooks = await getHooks(
-    sortedPlugins,
-    validatedPlugins,
-    "config",
-    "validateUserConfig",
-  );
-
-  const hookResults = await Promise.all(hooks.map(async (h) => h(config)));
-
-  return hookResults.flat(1);
-}
-
-async function resolveUserConfig(
-  sortedPlugins: HardhatPlugin[],
-  validatedPlugins: Set<string>,
-  config: HardhatUserConfig,
-): Promise<HardhatConfig> {
-  const initialResolvedConfig = {
-    plugins: sortedPlugins,
-  } as HardhatConfig;
-
-  const hooks = await getHooks(
-    sortedPlugins,
-    validatedPlugins,
-    "config",
-    "resolveUserConfig",
-  );
-
-  let index = hooks.length - 1;
-  const next = async (userConfig: HardhatUserConfig) => {
-    if (index >= 0) {
-      return hooks[index--]!(userConfig, next);
+    for (const _ of c) {
+      // all other input, and bits after the prompt, use echo char
+      (rl as any).output?.write(echo);
     }
-
-    return initialResolvedConfig;
   };
 
-  return next(config);
+  return new Promise<string>((resolve) => {
+    rl.question(`${inputDescription}: `, (answer) => {
+      resolve(answer);
+      rl.close();
+    });
+  });
 }
