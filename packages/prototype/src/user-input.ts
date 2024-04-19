@@ -4,27 +4,18 @@ import process from "process";
 import { createInterface } from "node:readline";
 
 interface UserInterruptionHooks {
-  displayMessage?: (message: string, next: () => void) => void;
+  displayMessage?: (message: string) => void;
 
-  requestInput?: (
-    inputDescription: string,
-    next: () => Promise<string>,
-  ) => Promise<string>;
+  requestInput?: (inputDescription: string) => Promise<string>;
 
-  requestSecretInput?: (
-    inputDescription: string,
-    next: () => Promise<string>,
-  ) => Promise<string>;
+  requestSecretInput?: (inputDescription: string) => Promise<string>;
 }
 
 const manualHooks: UserInterruptionHooks = {
-  displayMessage(message: string, _next: () => void) {
+  displayMessage(message: string) {
     console.log(message);
   },
-  async requestInput(
-    inputDescription: string,
-    _next: () => Promise<string>,
-  ): Promise<string> {
+  async requestInput(inputDescription: string): Promise<string> {
     if (process.stdin.isPaused()) {
       process.stdin.resume();
     }
@@ -71,23 +62,17 @@ const manualHooks: UserInterruptionHooks = {
 
     return line;
   },
-  async requestSecretInput(
-    inputDescription: string,
-    next: () => Promise<string>,
-  ): Promise<string> {
+  async requestSecretInput(inputDescription: string): Promise<string> {
     console.log("Oopsy, this leaks your secrets");
-    return this.requestInput!(inputDescription, next);
+    return this.requestInput!(inputDescription);
   },
 };
 
 const readlineHooks: UserInterruptionHooks = {
-  displayMessage(message: string, _next: () => void) {
+  displayMessage(message: string) {
     console.log(message);
   },
-  async requestInput(
-    inputDescription: string,
-    _next: () => Promise<string>,
-  ): Promise<string> {
+  async requestInput(inputDescription: string): Promise<string> {
     const readline = createInterface({
       input: process.stdin,
       output: process.stdout,
@@ -100,10 +85,7 @@ const readlineHooks: UserInterruptionHooks = {
       });
     });
   },
-  async requestSecretInput(
-    inputDescription: string,
-    _next: () => Promise<string>,
-  ): Promise<string> {
+  async requestSecretInput(inputDescription: string): Promise<string> {
     const rl = createInterface({
       input: process.stdin,
       output: process.stdout,
@@ -141,10 +123,10 @@ const readlineHooks: UserInterruptionHooks = {
 };
 
 const enquirerHooks: UserInterruptionHooks = {
-  displayMessage(message: string, _next: () => void) {
+  displayMessage(message: string) {
     console.log(message);
   },
-  async requestInput(inputDescription, _next: () => Promise<string>) {
+  async requestInput(inputDescription) {
     const { default: enquirer } = await import("enquirer");
     const questions = [
       {
@@ -157,7 +139,7 @@ const enquirerHooks: UserInterruptionHooks = {
     const answers = (await enquirer.prompt(questions)) as any;
     return answers.input;
   },
-  async requestSecretInput(inputDescription, _next: () => Promise<string>) {
+  async requestSecretInput(inputDescription) {
     const { default: enquirer } = await import("enquirer");
     const questions = [
       {
@@ -171,3 +153,27 @@ const enquirerHooks: UserInterruptionHooks = {
     return answers.input;
   },
 };
+
+
+setTimeout(() => manualHooks.requestSecretInput!("Password"), 2000);
+
+
+let rendering = false;
+
+let hooksState: {
+  messageToDisplay?: string;
+} = {};
+
+function render() {
+  useEffect(() => {
+    const hook = {}
+    registerHook(...);
+
+    return () => unregisterHook(...);
+  })
+
+  rendering = true;
+}
+
+
+render();

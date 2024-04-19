@@ -52,7 +52,11 @@
     "typescript-eslint": "7.5.0"
   },
   "dependencies": {
+    "@inkjs/ui": "^1.0.0",
+    "@types/react": "^18.2.79",
     "enquirer": "^2.3.0",
+    "ink": "^4.4.1",
+    "react": "^18.2.0",
     "zod": "^3.22.4"
   }
 }

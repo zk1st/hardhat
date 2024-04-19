@@ -52,16 +52,19 @@ export interface HardhatUserConfigValidationError {
 export interface UserInterruptionsHooks {
   displayMessage?: (
     message: string,
-    next: (m: string) => Promise<void>,
+    requester: string,
+    next: (m: string, r: string) => Promise<void>,
   ) => Promise<void>;
 
   requestInput?: (
     inputDescription: string,
-    next: (id: string) => Promise<string>,
+    requester: string,
+    next: (id: string, r: string) => Promise<string>,
   ) => Promise<string>;
 
   requestSecretInput?: (
     inputDescription: string,
-    next: (id: string) => Promise<string>,
+    requester: string,
+    next: (id: string, r: string) => Promise<string>,
   ) => Promise<string>;
 }

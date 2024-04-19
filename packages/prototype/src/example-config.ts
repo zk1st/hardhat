@@ -9,7 +9,10 @@ export default {
   },
   privateKey: {
     get: async (interruptions) => {
-      return interruptions.requestSecretInput("Private key");
+      return interruptions.requestSecretInput(
+        "Private key",
+        "Configuration variables",
+      );
     },
   },
 } satisfies HardhatUserConfig;

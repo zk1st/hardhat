@@ -57,46 +57,6 @@ export default {
         return resolvedConfig;
       },
     },
-    userInterruption: {
-      async displayMessage(
-        message: string,
-        _next: (m: string) => Promise<void>,
-      ) {
-        console.log(message);
-      },
-      async requestInput(
-        inputDescription,
-        _next: (id: string) => Promise<string>,
-      ) {
-        const { default: enquirer } = await import("enquirer");
-        const questions = [
-          {
-            type: "input",
-            name: "input",
-            message: inputDescription,
-          },
-        ];
-
-        const answers = (await enquirer.prompt(questions)) as any;
-        return answers.input;
-      },
-      async requestSecretInput(
-        inputDescription,
-        _next: (id: string) => Promise<string>,
-      ) {
-        const { default: enquirer } = await import("enquirer");
-        const questions = [
-          {
-            type: "password",
-            name: "input",
-            message: inputDescription,
-          },
-        ];
-
-        const answers = (await enquirer.prompt(questions)) as any;
-        return answers.input;
-      },
-    },
   },
   dependencies: [],
 } satisfies HardhatPlugin;
